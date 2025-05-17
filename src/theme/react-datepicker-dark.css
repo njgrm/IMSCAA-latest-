@@ -1,0 +1,147 @@
+/* src/react-datepicker-dark.css */
+/* Light mode overrides for react-datepicker */
+.react-datepicker {
+  background-color: #fff !important; /* Tailwind bg-white */
+  color: #145232 !important;           /* primary-800 */
+  border-color: #bbf7d0 !important;    /* primary-200 */
+}
+
+.react-datepicker__header {
+  background-color: #dcfce7 !important; /* primary-100 */
+  border-bottom-color: #bbf7d0 !important;
+}
+
+.react-datepicker__day,
+.react-datepicker__day-name,
+.react-datepicker__current-month {
+  color: #145232 !important; /* primary-800 */
+}
+
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected {
+  background-color: #2E9B63 !important; /* primary-600 */
+  color: #fff !important;
+}
+
+.react-datepicker__day--in-selecting-range,
+.react-datepicker__day--in-range {
+  background-color: #3FBF7F !important; /* primary-400 */
+  color: #145232 !important;            /* primary-800 for contrast */
+}
+
+.react-datepicker__day--range-start,
+.react-datepicker__day--range-end {
+  background-color: #238354 !important; /* primary-500 */
+  color: #fff !important;
+}
+
+.react-datepicker__day--today {
+  border-color: #3FBF7F !important;     /* primary-400 */
+}
+
+.react-datepicker__day:hover {
+  background-color: #86efac !important; /* primary-300 */
+  color: #145232 !important;            /* primary-800 */
+}
+
+.react-datepicker__triangle {
+  border-bottom-color: #fff !important;
+}
+
+/* --- Dark mode overrides below --- */
+.dark .react-datepicker {
+    background-color: #374151  !important; /* Tailwind dark:bg-gray-800 */
+    color: #f3f4f6 !important;           /* Tailwind dark:text-gray-100 */
+    border-color: #4b5563  !important;    /* Tailwind dark:border-gray-700 */
+  }
+  
+  .dark .react-datepicker__header {
+    background-color: #1f2937  !important; /* Tailwind dark:bg-gray-900 */
+    border-bottom-color: #4b5563  !important;
+  }
+  
+  .dark .react-datepicker__day,
+  .dark .react-datepicker__day-name,
+  .dark .react-datepicker__current-month {
+    color: #f3f4f6 !important; /* Tailwind dark:text-gray-100 */
+  }
+  
+  .dark .react-datepicker__day--selected,
+  .dark .react-datepicker__day--keyboard-selected {
+    background-color: #2E9B63 !important; /* primary-600 */
+    color: #fff !important;
+  }
+  
+  .dark .react-datepicker__day--in-selecting-range,
+  .dark .react-datepicker__day--in-range {
+    background-color: #3FBF7F !important; /* primary-400 */
+    color: #145232 !important;            /* primary-800 for contrast */
+  }
+  
+  .dark .react-datepicker__day--range-start,
+  .dark .react-datepicker__day--range-end {
+    background-color: #238354 !important; /* primary-500 */
+    color: #fff !important;
+  }
+  
+  .dark .react-datepicker__day--today {
+    border-color: #3FBF7F !important;     /* primary-400 */
+  }
+  
+  .dark .react-datepicker__day:hover {
+    background-color: #86efac !important; /* primary-300 */
+    color: #145232 !important;            /* primary-800 */
+  }
+  
+  .dark .react-datepicker__triangle {
+    border-bottom-color: #1f2937 !important;
+  }
+
+/* Style the clear (x) button for both light and dark mode */
+.react-datepicker__close-icon {
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 24px;
+  width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+/* Even when not visible, keep the space reserved */
+.react-datepicker__close-icon:not([style*="display: none"]) {
+  visibility: visible;
+}
+.react-datepicker__close-icon[style*="display: none"] {
+  visibility: hidden;
+  display: block !important;
+}
+
+.react-datepicker__close-icon::after {
+  background: none !important;
+  color: #2E9B63 !important; /* primary-600 */
+  font-size: 22px;
+  width: auto;
+  height: auto;
+  line-height: 1;
+  border-radius: 0;
+  box-shadow: none;
+ 
+}
+
+.datepicker-popper {
+  z-index: 9999 !important;
+  opacity: 1;
+}
+
+.react-datepicker__day,
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected,
+.react-datepicker__day--in-selecting-range,
+.react-datepicker__day--in-range,
+.react-datepicker__day--range-start,
+.react-datepicker__day--range-end,
+.react-datepicker__day--today {
+}

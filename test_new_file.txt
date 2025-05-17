@@ -1,0 +1,3 @@
+Hello! This is a test file created to demonstrate the file creation capability.
+
+It contains some simple text content. 
