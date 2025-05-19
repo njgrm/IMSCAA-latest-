@@ -1058,6 +1058,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
             
             return (
               <form onSubmit={saveTxnEdit} className="space-y-6">
+                
                 {/* ─── Read-only Info ─────────────────────────── */}
                 <div className="flex items-center space-x-4">
                   <img
@@ -1065,6 +1066,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                     alt="avatar"
                     className="w-12 h-12 rounded-full object-cover"
                   />
+                  
                   <div className="space-y-1">
                     <div className="font-medium">{u.user_fname} {u.user_lname}</div>
                     <div className="text-sm text-gray-400">{u.course} {u.year} - {u.section}</div>
@@ -1083,7 +1085,17 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                   </div>
                 </div>
 
-                
+                <div className="bg-yellow-50 dark:bg-yellow-900/30 p-3 rounded-lg border border-yellow-200 dark:border-yellow-700 mb-4">
+                  <div className="flex items-center text-yellow-800 dark:text-yellow-200">
+                    <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path>
+                    </svg>
+                    <span className="font-medium">Note:</span>
+                  </div>
+                  <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                    Only use this for correcting errors or adding descriptions. Use the Update function to verify and update payments.
+                  </p>
+                </div>
 
                 {/* ─── Editable Fields ────────────────────────── */}
                 <div>

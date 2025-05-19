@@ -81,7 +81,7 @@ const TransactionReportAreaChart: React.FC<LineChartProps> = ({ data }) => {
       shared: true,
       intersect: false,
       x: {
-        format: 'yyyy-MM-dd HH:mm:ss',
+        format: 'yyyy-MM-dd',
       },
       y: {
         formatter: val => `₱${val.toLocaleString()}`,

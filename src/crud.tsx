@@ -20,6 +20,7 @@ import Searchbar from "./components/Searchbar";
 import FilterDropdown, { Filters } from "./components/FilterDropdown";
 import Breadcrumb, { BreadcrumbItem } from './components/Breadcrumb';
 import { ThemeContext } from './theme/ThemeContext';
+import GenerateInviteDropdown from "./components/GenerateInviteDropdown";
 
 
 
@@ -52,6 +53,7 @@ const isDarkMode = theme === "dark";
 const toggleDarkMode = () => setTheme(isDarkMode ? 'light' : 'dark');
 const [showScrollButton, setShowScrollButton] = useState(false);
 const tableRef = useRef<HTMLDivElement>(null);
+const [currentUserRole, setCurrentUserRole] = useState<"President" | "Officer" | "Member" | null>(null);
 
 const trail: BreadcrumbItem[] = [
   { label: 'Home', to: '/dashboard' },
@@ -101,9 +103,11 @@ const emptyForm = {
     }
   };
 
-  function capitalize(str: string) {
-    if (!str) return "";
-    return str[0].toUpperCase() + str.slice(1).toLowerCase();
+  function capitalize(str: string): "President" | "Officer" | "Member" | null {
+    if (!str) return null;
+    const s = str[0].toUpperCase() + str.slice(1).toLowerCase();
+    if (s === "President" || s === "Officer" || s === "Member") return s;
+    return null;
   }
   
 
@@ -111,7 +115,24 @@ const emptyForm = {
     fetchUsers();
   }, []);
 
-  // Generic form handler (incl. file→base64)
+  useEffect(() => {
+    // Fetch current user role
+    fetch("http://localhost/my-app-server/get_current_user.php", {
+      credentials: "include"
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.role) setCurrentUserRole(capitalize(data.role));
+      })
+      .catch(() => setCurrentUserRole(null));
+  }, []);
+
+  useEffect(() => {
+    const handler = () => fetchUsers();
+    window.addEventListener('member-registered', handler);
+    return () => window.removeEventListener('member-registered', handler);
+  }, []);
+
   const handleFormChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -395,19 +416,21 @@ const emptyForm = {
       {/* Right: Add button + FilterDropdown */}
       <div className="flex items-center space-x-2 ml-4 relative">
         <ToastContainer />
-        <Button
-          onClick={() => {
-            setForm(emptyForm);
-            setIsAddOpen(true);
-          }}
-          className="bg-primary-600 py-1 px-2 hover:bg-primary-700 text-white dark:bg-primary-600 dark:hover:bg-primary-400 rounded-lg shadow-md transition-colors duration-200 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-opacity-50"
-        >
-          <svg className="w-5 h-5 mr-1 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-          <path fill-rule="evenodd" d="M9 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm-2 9a4 4 0 0 0-4 4v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1a4 4 0 0 0-4-4H7Zm8-1a1 1 0 0 1 1-1h1v-1a1 1 0 1 1 2 0v1h1a1 1 0 1 1 0 2h-1v1a1 1 0 1 1-2 0v-1h-1a1 1 0 0 1-1-1Z" clip-rule="evenodd"/>
-        </svg>
-
-           Add Member
-        </Button>
+        {currentUserRole !== 'Member' && (
+          <Button
+            onClick={() => {
+              setForm(emptyForm);
+              if (currentUserRole === 'Officer') setForm(f => ({ ...f, role: 'Member' }));
+              setIsAddOpen(true);
+            }}
+            className="bg-primary-600 py-1 px-2 hover:bg-primary-700 text-white dark:bg-primary-600 dark:hover:bg-primary-400 rounded-lg shadow-md transition-colors duration-200 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-opacity-50"
+          >
+            <svg className="w-5 h-5 mr-1 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+              <path fill-rule="evenodd" d="M9 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm-2 9a4 4 0 0 0-4 4v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1a4 4 0 0 0-4-4H7Zm8-1a1 1 0 0 1 1-1h1v-1a1 1 0 1 1 2 0v1h1a1 1 0 1 1 0 2h-1v1a1 1 0 1 1-2 0v-1h-1a1 1 0 0 1-1-1Z" clip-rule="evenodd"/>
+            </svg>
+            Add Member
+          </Button>
+        )}
         <div className="relative">
           <FilterDropdown
             isOpen={showFilter}
@@ -419,6 +442,9 @@ const emptyForm = {
             sections={sections}
           />
         </div>
+        {currentUserRole && (
+          <GenerateInviteDropdown userRole={currentUserRole === "President" ? "President" : "Officer"} />
+        )}
       </div>
     </div>
   </div>
@@ -625,16 +651,23 @@ const emptyForm = {
       {/* Role */}
       <div className="sm:col-span-2">
         <label className="block mb-1 text-sm">Role</label>
-          <select
+        <select
           name="role"
           value={form.role}
           onChange={handleFormChange}
           className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border-gray-300 rounded-lg border dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+          disabled={currentUserRole === 'Officer'}
         >
-          <option value="President">President</option>
-          <option value="Officer">Officer</option>
-          <option value="Member">Member</option>
-      `</select>
+          {currentUserRole === 'Officer' ? (
+            <option value="Member">Member</option>
+          ) : (
+            <>
+              <option value="President">President</option>
+              <option value="Officer">Officer</option>
+              <option value="Member">Member</option>
+            </>
+          )}
+        </select>
       </div>
 
       {/* Course */}
@@ -792,6 +825,7 @@ const emptyForm = {
           value={form.role}
           onChange={handleFormChange}
           className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border dark:border-gray-600 border-gray-300 focus:ring-primary-400 focus:border-primary-400"
+          disabled={currentUserRole === 'Officer' && isEditOpen}
         >
           <option value="President">President</option>
           <option value="Officer">Officer</option>

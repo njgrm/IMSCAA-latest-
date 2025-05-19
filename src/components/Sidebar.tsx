@@ -107,12 +107,27 @@ const Sidebar: React.FC = () => {
   const highlightRef = useRef<HTMLDivElement>(null);
   const [activeItem, setActiveItem] = useState<string | null>(null);
   const [reportsManuallyOpen, setReportsManuallyOpen] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('http://localhost/my-app-server/get_current_user.php', { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => setUserRole(data.role ? data.role.toLowerCase() : null))
+      .catch(() => setUserRole(null));
+  }, []);
+
+  const filteredNavItems = React.useMemo(() => {
+    if (userRole === 'member') {
+      return navItems.filter(item => ['dashboard', 'history'].includes(item.label.toLowerCase()));
+    }
+    return navItems;
+  }, [userRole]);
 
   // Find active item based on pathname
   useEffect(() => {
     let activeKey: string | undefined;
     let reportsHasActive = false;
-    for (let itm of navItems) {
+    for (let itm of filteredNavItems) {
       if (itm.sub) {
         const sub = itm.sub.find(s => pathname.startsWith(s.to));
         if (sub) { 
@@ -134,12 +149,12 @@ const Sidebar: React.FC = () => {
       const el = itemRefs.current[activeKey]!;
       setHighlight({ top: el.offsetTop, height: el.offsetHeight });
     }
-  }, [pathname, reportsManuallyOpen]);
+  }, [pathname, reportsManuallyOpen, filteredNavItems]);
 
   // Only show highlight if the item is visible
   const showHighlight = (() => {
     // If activeItem is a sub-route of Reports, only show highlight if openReports is true
-    const reportsSubRoutes = navItems.find(i => i.to === '/reports')?.sub?.map(s => s.to) || [];
+    const reportsSubRoutes = filteredNavItems.find(i => i.to === '/reports')?.sub?.map(s => s.to) || [];
     if (reportsSubRoutes.includes(activeItem || '')) {
       return openReports;
     }
@@ -207,7 +222,7 @@ const Sidebar: React.FC = () => {
         />
         )}
 
-        {navItems.map(item => {
+        {filteredNavItems.map(item => {
           const isActive = activeItem === item.to || (item.sub && item.sub.some(s => activeItem === s.to));
           
           return (
@@ -222,7 +237,7 @@ const Sidebar: React.FC = () => {
                   <button
                     onClick={() => {
                       // Only allow manual toggle if not on a sub-route
-                      const reportsSubRoutes = navItems.find(i => i.to === '/reports')?.sub?.map(s => s.to) || [];
+                      const reportsSubRoutes = filteredNavItems.find(i => i.to === '/reports')?.sub?.map(s => s.to) || [];
                       const isOnSubRoute = reportsSubRoutes.some(r => pathname.startsWith(r));
                       if (!isOnSubRoute) setReportsManuallyOpen(o => !o);
                     }}

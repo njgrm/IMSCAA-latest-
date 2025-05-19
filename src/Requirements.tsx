@@ -84,8 +84,10 @@ const Requirements: React.FC = () => {
       // Add data validation/normalization
       const validatedData = data.map(item => ({
         ...item,
-        req_picture: item.req_picture || '', amount_due: Number(item.amount_due) || 0,
+        req_picture: item.req_picture || '',
+        amount_due: Number(item.amount_due) || 0,
         start_datetime: item.start_datetime || '',
+        requirement_type: item.requirement_type || '',
         end_datetime: item.end_datetime || ''
       }));
   

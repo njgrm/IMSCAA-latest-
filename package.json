@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "apexcharts": "^4.7.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
     "flowbite-react": "^0.10.2",
     "motion": "^12.9.2",
     "react": "^19.0.0",
@@ -19,12 +21,15 @@
     "react-day-picker": "^9.6.7",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.2.0",
-    "react-toastify": "^11.0.5"
+    "react-toastify": "^11.0.5",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
+    "@types/socket.io-client": "^1.4.36",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.21.0",
@@ -36,5 +41,18 @@
     "typescript": "~5.7.2",
     "typescript-eslint": "^8.24.1",
     "vite": "^6.2.0"
-  }
+  },
+  "description": "This is a test project demonstrating file editing capabilities. The application is built with React, TypeScript, and Vite for a modern development experience.",
+  "main": "eslint.config.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/njgrm/IMSCAA-latest-.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/njgrm/IMSCAA-latest-/issues"
+  },
+  "homepage": "https://github.com/njgrm/IMSCAA-latest-#readme"
 }

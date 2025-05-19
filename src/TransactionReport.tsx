@@ -22,10 +22,10 @@ interface Transaction {
     amount_paid: number;
     payment_status: 'unpaid' | 'partial' | 'paid';
     payment_method: string | null;
-    due_date: string;
+    due_date: string; // string from backend, may be 'YYYY-MM-DD HH:mm:ss'
     verified_by: number;
-    date_added: string;
-    fee_description: string;
+    date: string; // backend returns as 'date'
+    description: string; // backend returns as 'description'
 }
 
 interface User {
@@ -177,9 +177,10 @@ const TransactionReport: React.FC = () => {
       if (filters.course && u?.course !== filters.course) return false;
       if (filters.year && String(u?.year) !== filters.year) return false;
       if (filters.section && u?.section !== filters.section) return false;
-      // Date range filter (use date_added)
-      if (dateRange.start && new Date(t.date_added) < new Date(dateRange.start)) return false;
-      if (dateRange.end && new Date(t.date_added) > new Date(dateRange.end)) return false;
+      // Date range filter (use t.date)
+      const safeDate = t.date ? new Date(t.date.replace(' ', 'T')) : null;
+      if (dateRange.start && safeDate && !isNaN(safeDate.getTime()) && safeDate < new Date(dateRange.start)) return false;
+      if (dateRange.end && safeDate && !isNaN(safeDate.getTime()) && safeDate > new Date(dateRange.end)) return false;
       return true;
     });
   }, [latestTxns, filters, users, feeRequirements, search, dateRange]);
@@ -190,7 +191,13 @@ const TransactionReport: React.FC = () => {
 
   // Sort filteredTxns by date_added ascending before paginating
   const sortedTxns = useMemo(() => {
-    return [...filteredTxns].sort((a, b) => new Date(a.date_added).getTime() - new Date(b.date_added).getTime());
+    return [...filteredTxns].sort((a, b) => {
+      const da = a.date ? new Date(a.date.replace(' ', 'T')) : null;
+      const db = b.date ? new Date(b.date.replace(' ', 'T')) : null;
+      if (!da || isNaN(da.getTime())) return 1;
+      if (!db || isNaN(db.getTime())) return -1;
+      return da.getTime() - db.getTime();
+    });
   }, [filteredTxns]);
   const totalRows = sortedTxns.length;
   const totalPages = Math.ceil(totalRows / rowsPerPage);
@@ -255,20 +262,26 @@ const TransactionReport: React.FC = () => {
     });
   }, [sortedTxns, requirementMap]);
 
-  // --- Aggregation for Area Chart (by Day, only paid and partial) ---
-  const areaChartData = useMemo(() => {
+  // --- Aggregation for Area/Line Chart (by Day, all payment activity) ---
+  const lineChartData = useMemo(() => {
     const map: Record<string, { label: string; paid: number; partial: number }> = {};
-    sortedTxns.forEach(t => {
+    transactions.forEach(t => {
       // Use only the date part for label (yyyy-MM-dd)
-      const dateObj = new Date(t.date_added);
-      const label = dateObj.toISOString().slice(0, 10); // yyyy-MM-dd
+      let label = '';
+      if (t.date) {
+        const dateObj = new Date(t.date.replace(' ', 'T'));
+        if (!isNaN(dateObj.getTime())) {
+          label = dateObj.toISOString().slice(0, 10); // yyyy-MM-dd
+        }
+      }
+      if (!label) return;
       if (!map[label]) map[label] = { label, paid: 0, partial: 0 };
       if (t.payment_status === 'paid') map[label].paid += t.amount_paid;
       else if (t.payment_status === 'partial') map[label].partial += t.amount_paid;
     });
     // Sort by date ascending
     return Object.values(map).sort((a, b) => new Date(a.label).getTime() - new Date(b.label).getTime());
-  }, [sortedTxns]);
+  }, [transactions]);
 
   // Add scroll-to-top button logic
   useEffect(() => {
@@ -352,6 +365,9 @@ const TransactionReport: React.FC = () => {
                     {sortedTxns.length === 0 ? null : paginatedTxns.map(t => {
                   const u = userMap[t.user_id];
                   const r = requirementMap[t.requirement_id];
+                  // Safe date parsing
+                  const dueDateObj = t.due_date ? new Date(t.due_date.replace(' ', 'T')) : null;
+                  const dateObj = t.date ? new Date(t.date.replace(' ', 'T')) : null;
                   return (
                         <tr key={t.transaction_id} className="border-b dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 ">
                           <td className="px-3.5 py-3.5 flex items-center">
@@ -374,8 +390,8 @@ const TransactionReport: React.FC = () => {
                           : t.payment_status === 'partial' ? 'bg-yellow-100 text-yellow-800'
                               : 'bg-red-100 text-red-800'}`}>{t.payment_status}</span>
                       </td>
-                      <td className="px-4 py-2">{new Date(t.due_date).toLocaleDateString()}</td>
-                          <td className="px-4 py-2">{new Date(t.date_added).toLocaleDateString()}</td>
+                      <td className="px-4 py-2">{dueDateObj && !isNaN(dueDateObj.getTime()) ? dueDateObj.toLocaleDateString() : '—'}</td>
+                      <td className="px-4 py-2">{dateObj && !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString() : '—'}</td>
                     </tr>
                   );
                 })}
@@ -448,34 +464,34 @@ const TransactionReport: React.FC = () => {
                 <div className="flex flex-col md:flex-row gap-4">
                   <div className="max-w-md w-full flex-shrink-0 flex justify-center">
                     <TransactionReportChart paid={paidCount} unpaid={unpaidCount} partial={partialCount} />
-                  </div>
+                </div>
                   <div className="flex-1 flex justify-center">
                     <TransactionReportBarChart data={barChartData} />
-                  </div>
                 </div>
+            </div>
                 <div>
-                  <TransactionReportAreaChart data={areaChartData} />
+                  <TransactionReportAreaChart data={lineChartData} />
                 </div>
-              </div>
+                </div>
             </>
           ) : (
             <div className="text-center text-gray-400 dark:text-gray-500 text-lg py-20">
               Please select date range and click <b>Generate Report</b> to view the transactional fees breakdown.
-            </div>
+                </div>
           )}
-        </div>
+                </div>
         {showScrollButton && (
-          <button
+        <button
             onClick={scrollToTop}
             className="fixed bottom-3 right-3 ml-2 transform  p-3 bg-white/40 dark:bg-gray-900 rounded-full shadow-lg transition-all duration-300 hover:bg-white/70 dark:hover:bg-gray-700/70 z-50 border border-gray-200 dark:border-gray-700"
             aria-label="Scroll to top"
           >
             <svg className="w-6 h-6 text-primary-600 dark:text-primary-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
               <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v13m0-13 4 4m-4-4-4 4"/>
-            </svg>
-          </button>
+                </svg>
+            </button>
         )}
-      </div>
+            </div>
     </div>
   );
 };
