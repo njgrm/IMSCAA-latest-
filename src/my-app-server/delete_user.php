@@ -20,6 +20,14 @@ $club_id = $_SESSION['club_id'] ?? 0;
 parse_str($_SERVER['QUERY_STRING'], $qs);
 $user_id = (int)($qs['user_id'] ?? 0);
 
+// Check role
+$role = strtolower($_SESSION['role'] ?? '');
+if ($role !== 'adviser') {
+  http_response_code(403);
+  echo json_encode(['error' => 'Only adviser can delete directly. Please submit a deletion request.']);
+  exit;
+}
+
 if (!$user_id || !$club_id) {
   http_response_code(400);
   echo json_encode(['error' => 'Missing parameters']);

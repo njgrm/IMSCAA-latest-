@@ -31,7 +31,7 @@ interface Student {
   user_mname: string;
   user_lname: string;
   email: string;
-  role: "President" | "Officer" | "Member";
+  role: "President" | "Officer" | "Member" | "Adviser";
   course: string;
   year: string;
   section: string;
@@ -53,7 +53,8 @@ const isDarkMode = theme === "dark";
 const toggleDarkMode = () => setTheme(isDarkMode ? 'light' : 'dark');
 const [showScrollButton, setShowScrollButton] = useState(false);
 const tableRef = useRef<HTMLDivElement>(null);
-const [currentUserRole, setCurrentUserRole] = useState<"President" | "Officer" | "Member" | null>(null);
+const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+const [deleteReason, setDeleteReason] = useState("");
 
 const trail: BreadcrumbItem[] = [
   { label: 'Home', to: '/dashboard' },
@@ -122,7 +123,7 @@ const emptyForm = {
     })
       .then(res => res.json())
       .then(data => {
-        if (data.role) setCurrentUserRole(capitalize(data.role));
+        if (data.role) setCurrentUserRole((data.role as string).toLowerCase());
       })
       .catch(() => setCurrentUserRole(null));
   }, []);
@@ -277,30 +278,55 @@ const emptyForm = {
   // DELETE
   const deleteStudent = async () => {
     if (!userToDelete) return;
-    
     try {
-      const res = await fetch(
-        `http://localhost/my-app-server/delete_user.php?user_id=${userToDelete}`,
-        {
-          method: "DELETE",
-          credentials: "include",
+      if ((currentUserRole || '').toLowerCase() === 'adviser') {
+        // Adviser: delete directly
+        const res = await fetch(
+          `http://localhost/my-app-server/delete_user.php?user_id=${userToDelete}`,
+          {
+            method: "DELETE",
+            credentials: "include",
+          }
+        );
+        const text = await res.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { error: text };
         }
-      );
-  
-      const text = await res.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = { error: text };
-      }
-  
-      if (res.ok) {
-        toast.success("Student deleted successfully!");
-        await fetchUsers();
+        if (res.ok) {
+          toast.success("Student deleted successfully!");
+          await fetchUsers();
+        } else {
+          toast.error(`Delete failed: ${data.error || "Unknown error"}`);
+          console.error("Delete failed:", data);
+        }
       } else {
-        toast.error(`Delete failed: ${data.error || "Unknown error"}`);
-        console.error("Delete failed:", data);
+        // President/Officer/Member: request deletion
+        const reasonToSend = deleteReason.trim() || "Request to delete user.";
+        const res = await fetch("http://localhost/my-app-server/add_deletion_request.php", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "user",
+            target_id: userToDelete,
+            reason: reasonToSend
+          })
+        });
+        const text = await res.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { error: text };
+        }
+        if (res.ok) {
+          toast.success("Delete request sent for approval.");
+        } else {
+          toast.error(`Request failed: ${data.error || "Unknown error"}`);
+        }
       }
     } catch (err: any) {
       toast.error(`Network error: ${err.message}`);
@@ -308,10 +334,10 @@ const emptyForm = {
     } finally {
       setIsDeleteModalOpen(false);
       setUserToDelete(null);
+      setDeleteReason("");
     }
   };
 
-  // Open edit modal & prefill
   const openEdit = (s: Student) => {
     setEditId(s.user_id);
     setForm({
@@ -359,7 +385,7 @@ const emptyForm = {
     const selectedRoles = (Object.keys(filters.roles) as Array<keyof Filters['roles']>)
     .filter(roleKey => filters.roles[roleKey]);
 
-  if (selectedRoles.length > 0 && !selectedRoles.includes(s.role)) {
+  if (selectedRoles.length > 0 && !selectedRoles.includes(s.role as any)) {
     return false;
   }
 
@@ -498,10 +524,12 @@ const emptyForm = {
                   <td className="px-4 py-3">
                     <span
                       className={`capitalize inline-block px-2 py-1 text-sm font-normal rounded ${
-                        s.role.toLowerCase() === "president"
+                        (s.role || "").toLowerCase() === "president"
                           ? "bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100"
-                          : s.role.toLowerCase() === "officer"
+                          : (s.role || "").toLowerCase() === "officer"
                           ? "bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100"
+                          : (s.role || "").toLowerCase() === "adviser"
+                          ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100"
                           : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
                       }`}
                     >
@@ -531,18 +559,33 @@ const emptyForm = {
                       Edit
                     </button>
 
-                   <button
-                      onClick={() => {
-                        setUserToDelete(s.user_id);
-                        setIsDeleteModalOpen(true);
-                      }}
-                      className="px-6 py-2 text-sm font-medium border border-red-500 text-red-500 rounded-lg  hover:bg-red-50 dark:hover:bg-red-900 transition-colors duration-200 ease-in-out transform hover:scale-105 flex items-center justify-center"
-                    >
+                   {(currentUserRole || '').toLowerCase() === 'adviser' ? (
+                     <button
+                       onClick={() => {
+                         setUserToDelete(s.user_id);
+                         setIsDeleteModalOpen(true);
+                       }}
+                       className="px-6 py-2 text-sm font-medium border border-red-500 text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900 transition-colors duration-200 ease-in-out transform hover:scale-105 flex items-center justify-center"
+                     >
                        <svg aria-hidden="true" className="w-5 h-5 mr-1.5 -ml-1" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" clipRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" />
                             </svg>
-                      Delete
-                    </button>
+                       Delete
+                     </button>
+                   ) : (
+                     <button
+                       onClick={() => {
+                         setUserToDelete(s.user_id);
+                         setIsDeleteModalOpen(true);
+                       }}
+                       className="px-6 py-2 text-sm font-medium border border-red-500 text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900 transition-colors duration-200 ease-in-out transform hover:scale-105 flex items-center justify-center"
+                     >
+                       <svg aria-hidden="true" className="w-5 h-5 mr-1.5 -ml-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" clipRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" />
+                            </svg>
+                       Request
+                     </button>
+                   )}
 
               
                   </td>
@@ -912,64 +955,62 @@ const emptyForm = {
 </Modal>
 
       {/* ——— DELETE MODAL ——— */}
-      <Modal show={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} size="md">
-                    <Modal.Body className="p-4 text-center bg-white dark:bg-gray-800 rounded-lg shadow sm:p-5">
-                      <button
-                        onClick={() => setIsDeleteModalOpen(false)}
-                        className="absolute top-2.5 right-2.5 text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white"
-                      >
-                        <svg 
-                          className="w-5 h-5" 
-                          fill="none" 
-                          stroke="currentColor" 
-                          viewBox="0 0 24 24"
-                        >
-                          <path 
-                            strokeLinecap="round" 
-                            strokeLinejoin="round" 
-                            strokeWidth={2} 
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
-                        <span className="sr-only">Close modal</span>
-                      </button>
-                  
-                      <svg 
-                        className="mx-auto mb-4 text-gray-400 w-14 h-14 dark:text-gray-200" 
-                        fill="none" 
-                        stroke="currentColor" 
-                        viewBox="0 0 24 24"
-                      >
-                        <path 
-                          strokeLinecap="round" 
-                          strokeLinejoin="round" 
-                          strokeWidth={2} 
-                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                  
-                      <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
-                        Are you sure you want to delete this requirement?
-                      </h3>
-                  
-                      <div className="flex justify-center items-center space-x-4">
-                        <Button 
-                          color="failure" 
-                          onClick={deleteStudent}
-                          className="px-5 py-2.5 text-sm font-medium"
-                        >
-                          Yes, I'm sure
-                        </Button>
-                        <Button 
-                          color="gray" 
-                          onClick={() => setIsDeleteModalOpen(false)}
-                          className="px-5 py-2.5 text-sm font-medium border border-gray-300 dark:border-gray-600"
-                        >
-                          No, cancel
-                        </Button>
-                      </div>
-                    </Modal.Body>
-                  </Modal>
+      {(currentUserRole || '').toLowerCase() === 'adviser' ? (
+        <Modal show={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}>
+          <Modal.Header className="dark:bg-gray-800">Confirm Deletion</Modal.Header>
+          <Modal.Body className="dark:bg-gray-800 dark:text-white rounded">
+            <div className="mb-4">Are you sure you want to delete this member? This action cannot be undone.</div>
+            <div className="flex justify-end space-x-2">
+              <Button color="failure" onClick={deleteStudent} className="px-8 bg-red-600 hover:bg-red-700 text-white">Delete</Button>
+              <Button color="gray" onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }} className="border border-gray-300 dark:border-gray-600">Cancel</Button>
+            </div>
+          </Modal.Body>
+        </Modal>
+      ) : (
+        <Modal show={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}>
+          <Modal.Header className="dark:bg-gray-800">Request Member Deletion</Modal.Header>
+          <Modal.Body className="dark:bg-gray-800 dark:text-white rounded">
+            {userToDelete && (() => {
+              const s = students.find(u => u.user_id === userToDelete);
+              if (!s) return null;
+              return (
+                <form className="space-y-6">
+                  {/* User Info */}
+                  <div className="flex items-center space-x-4 mb-2">
+                    <img src={s.avatar || placeholderImage} alt="avatar" className="w-12 h-12 rounded-full object-cover" />
+                    <div className="space-y-1">
+                      <div className="font-medium text-gray-900 dark:text-white">{s.user_fname} {s.user_lname}</div>
+                      <div className="text-sm text-gray-400">{s.school_id}</div>
+                      <div className="text-sm text-gray-400">{s.email}</div>
+                      <div className="text-sm text-gray-400">{s.role} - {s.course} {s.year} {s.section}</div>
+                    </div>
+                  </div>
+                  {/* Reason */}
+                  <div>
+                    <label className="block mb-1 text-sm">Reason for deletion (optional)</label>
+                    <textarea
+                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                      value={deleteReason}
+                      onChange={e => setDeleteReason(e.target.value)}
+                      placeholder="e.g. Duplicate entry, graduated, etc."
+                      rows={3}
+                    />
+                  </div>
+                  {/* Buttons */}
+                  <div className="flex justify-start space-x-2 mt-4">
+                    <Button type="button" color="failure" onClick={deleteStudent} className="px-8 bg-red-600 hover:bg-red-700 text-white">
+                      Request Deletion
+                    </Button>
+                    <Button type="button" color="gray" onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }} className="border border-gray-300 dark:border-gray-600">
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              );
+            })()}
+          </Modal.Body>
+        </Modal>
+      )}
     </div>
   );
 };

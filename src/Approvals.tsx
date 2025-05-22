@@ -51,7 +51,7 @@ interface BulkValues {
     payment_method: string;
   }
 
-const Transactions: React.FC = () => {
+const Approvals: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteTxnId, setDeleteTxnId] = useState<number|null>(null);
@@ -474,11 +474,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
     }
   };
 
-  // Add state for reason
-  const [deleteReason, setDeleteReason] = useState("");
-
-  // Update deleteTransaction to use reason
-  function deleteTransaction(txnId: number, reasonOverride?: string): Promise<void> {
+  function deleteTransaction(txnId: number): Promise<void> {
     return fetch("http://localhost/my-app-server/get_current_user.php", { credentials: "include" })
       .then(res => res.json())
       .then(user => {
@@ -498,7 +494,6 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
           });
         } else {
           // President/Officer: request deletion
-          const reasonToSend = reasonOverride || deleteReason.trim() || "Request to delete transaction.";
           return fetch("http://localhost/my-app-server/add_deletion_request.php", {
             method: "POST",
             credentials: "include",
@@ -506,7 +501,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
             body: JSON.stringify({
               type: "transaction",
               target_id: txnId,
-              reason: reasonToSend
+              reason: "Request to delete transaction."
             })
           }).then(async res => {
             const text = await res.text();
@@ -639,9 +634,6 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
     });
   };
 
-  // Add state for mass delete reason
-  const [massDeleteReason, setMassDeleteReason] = useState("");
-
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 py-14">
       <Sidebar />
@@ -711,7 +703,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                         <svg className="w-5 h-5 mr-1" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" clipRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"/>
                         </svg>
-                        Mass Request
+                        Mass Delete
                     </button>
 
               <FilterDropdownTxn
@@ -834,7 +826,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                                <svg aria-hidden="true" className="w-5 h-4 mr-1.5 -ml-1" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" clipRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"/>
                             </svg>
-                          Request
+                          Delete
                         </button>
                       </td>
                     </tr>
@@ -1327,65 +1319,76 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         {/* Delete confirmation modal */}
                 <Modal
                     show={isDeleteModalOpen}
-                    onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}
+                    onClose={() => setIsDeleteModalOpen(false)}
                     size="lg"
                 >
-                    <Modal.Header className="dark:bg-gray-800">Request Transaction Deletion</Modal.Header>
-                    <Modal.Body className="dark:bg-gray-800 dark:text-white rounded">
-                        {(() => {
-                          if (!deleteTxnId) return null;
-                          const t = transactions.find(x => x.transaction_id === deleteTxnId);
-                          if (!t) return null;
-                          const u = userMap[t.user_id];
-                          const r = requirementMap[t.requirement_id];
-                          return (
-                            <form className="space-y-6">
-                              {/* Transaction Info */}
-                              <div className="flex items-center space-x-4 mb-2">
-                                <img src={u?.avatar || placeholderImage} className="w-12 h-12 rounded-full object-cover" alt="avatar" />
-                                <div className="space-y-1">
-                                  <div className="font-medium text-gray-900 dark:text-white">{u ? `${u.user_fname} ${u.user_lname}` : `#${t.user_id}`}</div>
-                                  <div className="text-sm text-gray-400">{r?.title || '–'} | ₱{r?.amount_due.toFixed(2) || '–'}</div>
-                                  <div className="text-sm text-gray-400">{t.payment_status} | Paid: ₱{t.amount_paid.toFixed(2)}</div>
-                                  <div className="text-sm text-gray-400">Due: {new Date(t.due_date).toLocaleDateString()}</div>
-                                </div>
-                              </div>
-                              {/* Reason */}
-                              <div>
-                                <label className="block mb-1 text-sm">Reason for deletion (optional)</label>
-                                <textarea
-                                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
-                                  value={deleteReason}
-                                  onChange={e => setDeleteReason(e.target.value)}
-                                  placeholder="e.g. Duplicate, error, etc."
-                                  rows={3}
-                                />
-                              </div>
-                              {/* Buttons */}
-                              <div className="flex justify-start space-x-2 mt-4">
-                                <Button type="button" color="failure" onClick={async () => {
-                                  if (!deleteTxnId) return;
-                                  try {
-                                    await deleteTransaction(deleteTxnId, deleteReason.trim() || "Request to delete transaction.");
-                                    toast.success("Delete request sent for approval");
-                                    await fetchTransactions();
-                                  } catch (err: any) {
-                                    toast.error(err.message);
-                                  } finally {
-                                    setIsDeleteModalOpen(false);
-                                    setDeleteTxnId(null);
-                                    setDeleteReason("");
-                                  }
-                                }} className="px-8 bg-red-600 hover:bg-red-700 text-white">
-                                  Request Deletion
-                                </Button>
-                                <Button type="button" color="gray" onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }} className="border border-gray-300 dark:border-gray-600">
-                                  Cancel
-                                </Button>
-                              </div>
-                            </form>
-                          );
-                        })()}
+                    <Modal.Body className="p-4 text-center bg-white dark:bg-gray-800 rounded-lg shadow sm:p-5">
+                    <button
+                        onClick={() => setIsDeleteModalOpen(false)}
+                        className="absolute top-2.5 right-2.5 text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white"
+                    >
+                        <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        >
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                        />
+                        </svg>
+                        <span className="sr-only">Close modal</span>
+                    </button>
+
+                    <svg
+                        className="mx-auto mb-4 text-gray-400 w-14 h-14 dark:text-gray-200"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                    </svg>
+
+                    <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
+                        Are you sure you want to delete this transaction? This action cannot be undone.
+                    </h3>
+
+                    <div className="flex justify-center items-center space-x-4">
+                    <Button
+                          color="failure"
+                          onClick={async () => {
+                            if (deleteTxnId == null) return;
+                            try {
+                              await deleteTransaction(deleteTxnId);
+                              toast.success("Transaction deleted");
+
+                              await fetchTransactions();
+                            } catch (err: any) {
+                              toast.error(err.message || "Delete failed");
+                            } finally {
+                              setIsDeleteModalOpen(false);
+                            }
+                          }}
+                          className="px-5 py-2.5 text-sm font-medium"
+                        >
+                Yes, I'm sure
+                        </Button>
+                        <Button
+                        color="gray"
+                        onClick={() => setIsDeleteModalOpen(false)}
+                        className="px-5 py-2.5 text-sm font-medium border border-gray-300 dark:border-gray-600"
+                        >
+                        No, cancel
+                        </Button>
+                    </div>
                     </Modal.Body>
                 </Modal>
 
@@ -1599,63 +1602,71 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                 </Modal>
 
                 {/* ── MASS DELETE CONFIRMATION ─────────────────────── */}
-<Modal show={isMassDeleteConfirmOpen} onClose={() => { setIsMassDeleteConfirmOpen(false); setMassDeleteReason(""); }} size="lg">
-  <Modal.Header className="dark:bg-gray-800">Request Mass Transaction Deletion</Modal.Header>
-  <Modal.Body className="dark:bg-gray-800 dark:text-white rounded">
-    <form className="space-y-6 overflow-y-auto max-h-[70vh]">
-      {/* List of selected transactions */}
-      <div className="space-y-4">
-        {selectedTxns.map(id => {
-          const t = transactions.find(x => x.transaction_id === id);
-          if (!t) return null;
-          const u = userMap[t.user_id];
-          const r = requirementMap[t.requirement_id];
-          return (
-            <div key={id} className="flex items-center space-x-4 bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
-              <img src={u?.avatar || placeholderImage} alt="avatar" className="w-10 h-10 rounded-full object-cover" />
-              <div className="space-y-1">
-                <div className="font-medium text-gray-900 dark:text-white">{u ? `${u.user_fname} ${u.user_lname}` : `#${t.user_id}`}</div>
-                <div className="text-sm text-gray-400">{r?.title || '–'} | ₱{r?.amount_due.toFixed(2) || '–'}</div>
-                <div className="text-sm text-gray-400">{t.payment_status} | Paid: ₱{t.amount_paid.toFixed(2)}</div>
-                <div className="text-sm text-gray-400">Due: {new Date(t.due_date).toLocaleDateString()}</div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      {/* Reason */}
-      <div>
-        <label className="block mb-1 text-sm">Reason for deletion (optional)</label>
-        <textarea
-          className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
-          value={massDeleteReason}
-          onChange={e => setMassDeleteReason(e.target.value)}
-          placeholder="e.g. Duplicate, error, etc."
-          rows={3}
-        />
-      </div>
-      {/* Buttons */}
-      <div className="flex justify-start space-x-2 mt-4">
-        <Button type="button" color="failure" onClick={async () => {
-          setIsMassDeleteConfirmOpen(false);
-          try {
-            await Promise.all(selectedTxns.map(id => deleteTransaction(id, massDeleteReason.trim() || "Request to delete transaction.")));
-            toast.success("Delete requests sent for approval");
-            setSelectedTxns([]);
-            await fetchTransactions();
-          } catch (err: any) {
-            toast.error(err.message);
-          } finally {
-            setMassDeleteReason("");
-          }
-        }} className="px-8 bg-red-600 hover:bg-red-700 text-white">
-          Mass Request Deletion
-        </Button>
-        <Button type="button" color="gray" onClick={() => { setIsMassDeleteConfirmOpen(false); setMassDeleteReason(""); }} className="border border-gray-300 dark:border-gray-600">
-          Cancel
-        </Button>
-      </div>
-    </form>
+<Modal show={isMassDeleteConfirmOpen} onClose={() => setIsMassDeleteConfirmOpen(false)} size="lg">
+  <Modal.Body className="p-4 text-center bg-white dark:bg-gray-800 rounded-lg shadow sm:p-5">
+    <button
+      onClick={() => setIsMassDeleteConfirmOpen(false)}
+      className="absolute top-2.5 right-2.5 text-gray-400 hover:text-gray-900 dark:hover:text-white"
+    >
+      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        >
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                        />
+                        </svg>
+                        <span className="sr-only">Close modal</span>
+                    </button>
+
+                    <svg
+                        className="mx-auto mb-4 text-gray-400 w-14 h-14 dark:text-gray-200"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                    </svg>
+
+                    <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
+      Are you sure you want to delete these {selectedTxns.length} transactions? This action cannot be undone.
+    </h3>
+    <div className="flex justify-center space-x-4">
+      <Button
+        color="failure"
+        onClick={async () => {
+            setIsMassDeleteConfirmOpen(false);
+            try {
+              await Promise.all(selectedTxns.map(id => deleteTransaction(id)));
+              toast.success("Transactions deleted");
+              setSelectedTxns([]);           
+              await fetchTransactions();     
+            } catch (err: any) {
+              toast.error(err.message);
+            }
+          }}
+        className="px-5 py-2.5 text-sm font-medium"
+      >
+        Yes, delete
+      </Button>
+      <Button
+        color="gray"
+        onClick={() => setIsMassDeleteConfirmOpen(false)}
+        className="px-5 py-2.5 text-sm font-medium"
+      >
+        No, cancel
+      </Button>
+    </div>
   </Modal.Body>
 </Modal>
 
@@ -2103,4 +2114,4 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
   );
 };
 
-export default Transactions;
+export default Approvals;

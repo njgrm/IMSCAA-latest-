@@ -41,6 +41,7 @@ const Requirements: React.FC = () => {
   const toggleDarkMode = () => setTheme(theme === 'dark' ? 'light' : 'dark');
   const [showScrollButton, setShowScrollButton] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
+  const [deleteReason, setDeleteReason] = useState("");
 
   const trail: BreadcrumbItem[] = [
     { label: 'Home', to: '/dashboard' },
@@ -203,25 +204,55 @@ const Requirements: React.FC = () => {
 
   const deleteRequirement = async () => {
     if (!requirementToDelete) return;
-
     try {
-      const res = await fetch(
-        `http://localhost/my-app-server/delete_requirement.php?requirement_id=${requirementToDelete}`,
-        { method: "DELETE", credentials: "include" }
-      );
-
-      if (res.ok) {
-        toast.success("Requirement deleted successfully!");
-        await fetchRequirements();
+      const resRole = await fetch("http://localhost/my-app-server/get_current_user.php", { credentials: "include" });
+      const user = await resRole.json();
+      const role = user.role ? user.role.toLowerCase() : null;
+      if (role === 'adviser') {
+        // Adviser: delete directly
+        const res = await fetch(
+          `http://localhost/my-app-server/delete_requirement.php?requirement_id=${requirementToDelete}`,
+          { method: "DELETE", credentials: "include" }
+        );
+        if (res.ok) {
+          toast.success("Requirement deleted successfully!");
+          await fetchRequirements();
+        } else {
+          const data = await res.json();
+          toast.error(`Delete failed: ${data.error}`);
+        }
       } else {
-        const data = await res.json();
-        toast.error(`Delete failed: ${data.error}`);
+        // President/Officer: request deletion
+        const reasonToSend = deleteReason.trim() || "Request to delete requirement.";
+        const res = await fetch("http://localhost/my-app-server/add_deletion_request.php", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "requirement",
+            target_id: requirementToDelete,
+            reason: reasonToSend
+          })
+        });
+        const text = await res.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { error: text };
+        }
+        if (res.ok) {
+          toast.success("Delete request sent for approval.");
+        } else {
+          toast.error(`Request failed: ${data.error || "Unknown error"}`);
+        }
       }
     } catch (err: any) {
       toast.error(`Network error: ${err.message}`);
     } finally {
       setIsDeleteModalOpen(false);
       setRequirementToDelete(null);
+      setDeleteReason("");
     }
   };
 
@@ -406,7 +437,7 @@ const Requirements: React.FC = () => {
                             <svg aria-hidden="true" className="w-5 h-5 mr-1.5 -ml-1" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" clipRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" />
                             </svg>
-                            Delete
+                            Request
                             </button>
                         </div>
                         </td>
@@ -782,62 +813,52 @@ const Requirements: React.FC = () => {
 </Modal>
 
     {/* Delete Requirement Modal */}
-<Modal show={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} size="md">
-  <Modal.Body className="p-4 text-center bg-white dark:bg-gray-800 rounded-lg shadow sm:p-5">
-    <button
-      onClick={() => setIsDeleteModalOpen(false)}
-      className="absolute top-2.5 right-2.5 text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white"
-    >
-      <svg 
-        className="w-5 h-5" 
-        fill="none" 
-        stroke="currentColor" 
-        viewBox="0 0 24 24"
-      >
-        <path 
-          strokeLinecap="round" 
-          strokeLinejoin="round" 
-          strokeWidth={2} 
-          d="M6 18L18 6M6 6l12 12"
-        />
-      </svg>
-      <span className="sr-only">Close modal</span>
-    </button>
-
-    <svg 
-      className="mx-auto mb-4 text-gray-400 w-14 h-14 dark:text-gray-200" 
-      fill="none" 
-      stroke="currentColor" 
-      viewBox="0 0 24 24"
-    >
-      <path 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
-        strokeWidth={2} 
-        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-      />
-    </svg>
-
-    <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
-      Are you sure you want to delete this requirement?
-    </h3>
-
-    <div className="flex justify-center items-center space-x-4">
-      <Button 
-        color="failure" 
-        onClick={deleteRequirement}
-        className="px-5 py-2.5 text-sm font-medium"
-      >
-        Yes, I'm sure
-      </Button>
-      <Button 
-        color="gray" 
-        onClick={() => setIsDeleteModalOpen(false)}
-        className="px-5 py-2.5 text-sm font-medium border border-gray-300 dark:border-gray-600"
-      >
-        No, cancel
-      </Button>
-    </div>
+<Modal show={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}>
+  <Modal.Header className="dark:bg-gray-800">Request Requirement Deletion</Modal.Header>
+  <Modal.Body className="dark:bg-gray-800 dark:text-white rounded">
+    {requirementToDelete && (() => {
+      const r = requirements.find(x => x.requirement_id === requirementToDelete);
+      if (!r) return null;
+      return (
+        <form className="space-y-6 overflow-y-auto max-h-[80vh]">
+          <img src={r.req_picture || placeholderImage} alt="Requirement" className="w-full h-full rounded object-cover" />
+          {/* Requirement Info */}
+          <div className="flex items-center space-x-4 mb-2">
+            <div className="space-y-1">
+              <div className="font-medium text-gray-900 dark:text-white">{r.title}</div>
+              <div className="text-sm text-gray-400">{r.requirement_type} | {r.status}</div>
+              <div className="text-sm text-gray-400">{r.location}</div>
+              <div className="text-sm text-gray-400">
+                {new Date(r.start_datetime).toLocaleDateString()} - {new Date(r.end_datetime).toLocaleDateString()}
+              </div>
+              {r.requirement_type === 'fee' && (
+                <div className="text-sm text-gray-400">Amount Due: ₱{Number(r.amount_due).toFixed(2)}</div>
+              )}
+            </div>
+          </div>
+          {/* Reason */}
+          <div>
+            <label className="block mb-1 text-sm">Reason for deletion (optional)</label>
+            <textarea
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+              value={deleteReason}
+              onChange={e => setDeleteReason(e.target.value)}
+              placeholder="e.g. No longer needed, duplicate, etc."
+              rows={3}
+            />
+          </div>
+          {/* Buttons */}
+          <div className="flex justify-start space-x-2 mt-4">
+            <Button type="button" color="failure" onClick={deleteRequirement} className="px-8 bg-red-600 hover:bg-red-700 text-white">
+              Request Deletion
+            </Button>
+            <Button type="button" color="gray" onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }} className="border border-gray-300 dark:border-gray-600">
+              Cancel
+            </Button>
+          </div>
+        </form>
+      );
+    })()}
   </Modal.Body>
 </Modal>
 

@@ -18,10 +18,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 $user_id = $_SESSION['user_id'] ?? null;
 $club_id = $_SESSION['club_id'] ?? null;
+$role = strtolower($_SESSION['role'] ?? '');
 
 if (!$user_id || !$club_id) {
     http_response_code(401);
     echo json_encode(['error' => 'Not authenticated']);
+    exit;
+}
+
+if ($role !== 'adviser') {
+    http_response_code(403);
+    echo json_encode(['error' => 'Only adviser can delete directly. Please submit a deletion request.']);
     exit;
 }
 
