@@ -34,6 +34,8 @@ interface User {
   course: string,
   year: number,
   section: string,
+  email?: string;
+  role?: string;
 }
 
 interface Requirement {
@@ -42,6 +44,11 @@ interface Requirement {
   amount_due: number;
   end_datetime: string;  
   req_picture: string;
+  requirement_type?: string;
+  location?: string;
+  start_datetime?: string;
+  date_added?: string;
+  status?: string;
 }
 
 interface BulkValues {
@@ -634,77 +641,195 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
     });
   };
 
+  // 1. Add state for deletion requests and selected requests
+  const [deletionRequests, setDeletionRequests] = useState<any[]>([]);
+  const [selectedRequests, setSelectedRequests] = useState<number[]>([]);
+
+  // 2. Fetch grouped deletion requests on mount
+  useEffect(() => {
+    fetch('http://localhost/my-app-server/get_deletion_requests.php', { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => setDeletionRequests(Array.isArray(data) ? data : []));
+  }, []);
+
+  // 3. Group requests by (type, target_id)
+  const groupedRequests = useMemo(() => {
+    const map = new Map();
+    for (const req of deletionRequests) {
+      const key = req.type + ':' + req.target_id;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(req);
+    }
+    return Array.from(map.values());
+  }, [deletionRequests]);
+
+  // 4. Table columns: Type, Title/Name, Requesters, Reason (summary), Status, Requested At, Actions
+  const toggleRequest = (request_id: number) =>
+    setSelectedRequests(s => s.includes(request_id) ? s.filter(x => x !== request_id) : [...s, request_id]);
+
+  const toggleAllRequests = (e: React.ChangeEvent<HTMLInputElement>) =>
+    e.target.checked
+      ? setSelectedRequests(groupedRequests.flat().map(r => r.request_id))
+      : setSelectedRequests([]);
+
+  const handleMassApprove = async () => {
+    try {
+      const res = await fetch("http://localhost/my-app-server/approve_deletion_request.php", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          request_ids: selectedRequests
+        })
+      });
+      if (!res.ok) throw new Error("Failed to approve requests");
+      toast.success("Requests approved");
+      setSelectedRequests([]);
+      await fetchDeletionRequests();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleMassDeny = async () => {
+    try {
+      const res = await fetch("http://localhost/my-app-server/deny_deletion_request.php", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          request_ids: selectedRequests
+        })
+      });
+      if (!res.ok) throw new Error("Failed to deny requests");
+      toast.success("Requests denied");
+      setSelectedRequests([]);
+      await fetchDeletionRequests();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleApprove = async (reqs: any[]) => {
+    try {
+      const res = await fetch("http://localhost/my-app-server/approve_deletion_request.php", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          request_ids: reqs.map(r => r.request_id)
+        })
+      });
+      if (!res.ok) throw new Error("Failed to approve requests");
+      toast.success("Requests approved");
+      setSelectedRequests(prev => prev.filter(r => !reqs.includes(r)));
+      await fetchDeletionRequests();
+      setIsPreviewOpen(false); // close drawer if open
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleDeny = async (reqs: any[]) => {
+    try {
+      const res = await fetch("http://localhost/my-app-server/deny_deletion_request.php", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          request_ids: reqs.map(r => r.request_id)
+        })
+      });
+      if (!res.ok) throw new Error("Failed to deny requests");
+      toast.success("Requests denied");
+      setSelectedRequests(prev => prev.filter(r => !reqs.includes(r)));
+      await fetchDeletionRequests();
+      setIsPreviewOpen(false); // close drawer if open
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const fetchDeletionRequests = async () => {
+    try {
+      const res = await fetch("http://localhost/my-app-server/get_deletion_requests.php", {
+        credentials: "include"
+      });
+      const data = await res.json();
+      setDeletionRequests(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  // Add state for previewed request group
+  const [previewReqs, setPreviewReqs] = useState<any[] | null>(null);
+
+  function openPreviewDrawer(reqs: any[]) {
+    setPreviewReqs(reqs);
+    setIsPreviewOpen(true);
+  }
+
+  // Add state for confirmation modals
+  const [confirmAction, setConfirmAction] = useState<{action: 'approve'|'deny', reqs: any[]}|null>(null);
+  const [confirmFromPreview, setConfirmFromPreview] = useState(false);
+
+  useEffect(() => {
+    const handler = () => fetchDeletionRequests();
+    window.addEventListener('deletion-request-status', handler);
+    return () => window.removeEventListener('deletion-request-status', handler);
+  }, []);
+
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 py-14">
       <Sidebar />
-      <div className="flex-1 ml-64 relative flex flex-col">
-        <div className="p-5 pb-0">
+      <div className="flex-1 sm:ml-64 relative flex flex-col">
+        <div className="p-3 sm:px-5 sm:pt-5 sm:pb-2">
           <Breadcrumb items={trail} />
-          <div className="flex items-center justify-between dark:border-gray-700 pt-0 mb-0">
-            <div className="flex-1">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between dark:border-gray-700 pt-0 mb-0 gap-4 sm:gap-0">
+            <div className="flex-1 max-w-md">
               <Searchbar 
                 search={filters.search}
                 onSearchChange={term => setFilters(f => ({ ...f, search: term }))}
               />
             </div>
 
-            <div className="flex items-center space-x-2 ml-4 relative">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 ml-0 sm:ml-4 relative">
               <ToastContainer />
-              <Button
-                onClick={openAddModal}
-                className="bg-primary-600 py-1 hover:bg-primary-400 text-white dark:bg-primary-600 dark:hover:bg-primary-400 focus:ring-primary-300 rounded-lg shadow-md transition-transform duration-200 ease-in-out transform hover:scale-105"
-              >
-                + Add Transaction
-              </Button>
-
-                {/* Mass Edit */}
-                    <Button
-                        onClick={() => setIsMassEditOpen(true)}
-                        disabled={selectedTxns.length < 2}
-                        className={`py-1 focus:ring-primary-300 px-3 flex items-center text-sm font-medium text-white rounded-lg shadow-md  transition-transform duration-200 ease-in-out transform hover:scale-105 ${
-                        selectedTxns.length >= 2
-                            ? "bg-primary-600 hover:bg-primary-400"
-                            : "bg-primary-500 cursor-not-allowed"
-                        }`}
-                    >
-                        <svg className="w-5 h-5 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z"/>
-                        <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd"/>
+                 {/* Mass Approve/Deny */}
+          <div className="flex items-center mb-0 space-x-2">
+            <button
+              
+              disabled={selectedRequests.length === 0}
+              onClick={handleMassApprove}
+              className={`py-2 sm:py-3 bg-primary-600 hover:bg-primary-400 focus:ring-primary-300 px-4 sm:px-6 flex items-center text-xs sm:text-sm font-medium text-white rounded-lg shadow-md  transition-transform duration-200 ease-in-out transform hover:scale-105 ${
+                selectedRequests.length >= 2
+                  ? 'opacity-100'
+                  : 'opacity-50 cursor-not-allowed'
+              }`}
+            >
+               <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3 -ml-0 text-white" fill="currentColor" viewBox="0 3 20 20">
+               <path fill-rule="evenodd" d="M15.03 9.684h3.965c.322 0 .64.08.925.232.286.153.532.374.717.645a2.109 2.109 0 0 1 .242 1.883l-2.36 7.201c-.288.814-.48 1.355-1.884 1.355-2.072 0-4.276-.677-6.157-1.256-.472-.145-.924-.284-1.348-.404h-.115V9.478a25.485 25.485 0 0 0 4.238-5.514 1.8 1.8 0 0 1 .901-.83 1.74 1.74 0 0 1 1.21-.048c.396.13.736.397.96.757.225.36.32.788.269 1.211l-1.562 4.63ZM4.177 10H7v8a2 2 0 1 1-4 0v-6.823C3 10.527 3.527 10 4.176 10Z" clip-rule="evenodd"/>
                         </svg>
-                        Mass Edit
-                    </Button>
+              <span className="hidden sm:inline">Mass </span>Approve
+            </button>
+            <button
+             
+              onClick={handleMassDeny}
+              disabled={selectedRequests.length < 2}
+              className={`py-2 sm:py-3 bg-red-500 hover:bg-red-400 focus:ring-primary-300 px-4 sm:px-8 flex items-center text-xs sm:text-sm font-medium text-white rounded-lg shadow-md  transition-transform duration-200 ease-in-out transform hover:scale-105 ${
+                selectedRequests.length >= 2
+                  ? 'opacity-100'
+                  : 'opacity-50 cursor-not-allowed'
+              }`}
+            >
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3 -ml-0 text-white" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M8.97 14.316H5.004c-.322 0-.64-.08-.925-.232a2.022 2.022 0 0 1-.717-.645 2.108 2.108 0 0 1-.242-1.883l2.36-7.201C5.769 3.54 5.96 3 7.365 3c2.072 0 4.276.678 6.156 1.256.473.145.925.284 1.35.404h.114v9.862a25.485 25.485 0 0 0-4.238 5.514c-.197.376-.516.67-.901.83a1.74 1.74 0 0 1-1.21.048 1.79 1.79 0 0 1-.96-.757 1.867 1.867 0 0 1-.269-1.211l1.562-4.63ZM19.822 14H17V6a2 2 0 1 1 4 0v6.823c0 .65-.527 1.177-1.177 1.177Z" clip-rule="evenodd"/>
+            </svg>
 
-                      {/* Mass Update */}
-                      <Button
-                        onClick={() => setIsMassUpdateOpen(true)}
-                        disabled={selectedTxns.length < 2}
-                        className={`py-1 focus:ring-secondary-300 px-1 flex items-center text-sm font-medium text-white rounded-lg shadow-md  transition-transform duration-200 ease-in-out transform hover:scale-105 ${
-                        selectedTxns.length >= 2
-                            ? "bg-secondary-500 hover:bg-secondary-400"
-                            : "bg-secondary-500 cursor-not-allowed"
-                        }`}
-                    >
-                       <svg className="w-5 h-5 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
-                        </svg>
-                        Mass Update
-                    </Button>
-
-                    {/* Mass Delete */}
-                    <button
-                        onClick={() => setIsMassDeleteConfirmOpen(true)}
-                        disabled={selectedTxns.length < 2}
-                        className={`py-3 px-3 flex items-center text-sm font-medium rounded-lg  shadow-md transition-transform duration-200 ease-in-out transform hover:scale-105 ${
-                        selectedTxns.length >= 2
-                            ? "border border-red-500 text-red-500 hover:bg-red-50  dark:hover:bg-red-900"
-                            : "border border-gray-400 text-gray-400 cursor-not-allowed"
-                        }`}
-                    >
-                        <svg className="w-5 h-5 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" clipRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"/>
-                        </svg>
-                        Mass Delete
-                    </button>
+              <span className="hidden sm:inline">Mass </span>Deny
+            </button>
+          </div>
 
               <FilterDropdownTxn
           isOpen={showFilter}
@@ -720,114 +845,127 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-5 pt-0">
+        <div className="flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
+      
           <div ref={tableRef} className="overflow-x-auto shadow-md relative z-10">
-            <table className="min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow dark:text-white text-s">
+            <table className="min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow dark:text-white text-sm sm:text-sm">
               <thead className="bg-gray-100 dark:bg-gray-700">
                 <tr>
-                  <th className="px-2 py-2 pl-0">
+                  <th className="px-2 sm:px-2 py-2 pl-0">
                     <input
                       type="checkbox"
-                      onChange={toggleAllTxns}
-                      checked={selectedTxns.length === filteredTxns.length && filteredTxns.length > 0}
-                      className="mr-0 w-4 h-4  bg-gray-100 border-gray-300 rounded text-primary-600 focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-700 focus:ring-2 dark:bg-gray-600 dark:border-gray-500"
+                      onChange={toggleAllRequests}
+                      checked={selectedRequests.length === groupedRequests.length && groupedRequests.length > 0}
+                      className="W ml-0 mr-4 w-3 h-3 sm:w-4 sm:h-4 bg-gray-100 border-gray-300 rounded text-primary-600 focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-700 focus:ring-2 dark:bg-gray-600 dark:border-gray-500"
                     />
                   </th>
-                  {[
-                    'Name','Year','Section','Fee Title',
-                    'Amount Due','Amount Paid','Status',
-                    'Due Date','Actions'
-                  ].map(col => (
-                    <th key={col} className="px-4 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">{col}</th>
-                  ))}
+                  <th className="px-2 sm:px-4 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">Type</th>
+                  <th className="px-2 sm:px-4 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">Title/Name</th>
+                  <th className="px-2 sm:px-4 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">Requested By</th>
+                  <th className="px-2 sm:px-4 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">Status</th>
+                  <th className="px-2 sm:px-4 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">Requested At</th>
+                  <th className="px-2 sm:px-4 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">Actions</th>
                 </tr>
               </thead>
-              
               <tbody>
-                {filteredTxns.map(t => {
-                  const u = userMap[t.user_id];
-                  const r = requirementMap[t.requirement_id];
+                {groupedRequests.map((reqs, idx) => {
+                  const first = reqs[0];
+                  const isSelected = selectedRequests.includes(first.request_id);
+                  let title = '', typeLabel = '', userName = '';
+                  if (first.type === 'user') {
+                    const u = users.find(u => u.user_id === first.target_id);
+                    title = u ? `${u.user_fname} ${u.user_lname}` : `User #${first.target_id}`;
+                    typeLabel = 'Member';
+                  } else if (first.type === 'requirement') {
+                    const r = feeRequirements.find(r => r.requirement_id === first.target_id);
+                    title = r ? r.title : `Requirement #${first.target_id}`;
+                    typeLabel = 'Requirement';
+                  } else if (first.type === 'transaction') {
+                    const t = transactions.find(t => t.transaction_id === first.target_id);
+                    let r = t ? feeRequirements.find(r => r.requirement_id === t.requirement_id) : null;
+                    const u = t ? users.find(u => u.user_id === t.user_id) : null;
+                    userName = u ? `${u.user_fname} ${u.user_lname}` : `User #${t?.user_id ?? ''}`;
+                    const reqTitle = r ? r.title : `Txn #${t?.transaction_id ?? first.target_id}`;
+                    title = `${reqTitle} for ${userName}`;
+                    typeLabel = 'Transaction';
+                  } else {
+                    title = `#${first.target_id}`;
+                    typeLabel = first.type;
+                  }
+                  const requesters = reqs.length > 1 ? 'Multiple users' : (() => {
+                    const u = users.find(u => u.user_id === reqs[0].requested_by);
+                    return u ? `${u.user_fname} ${u.user_lname}` : `User #${reqs[0].requested_by}`;
+                  })();
+                  const status = reqs.every((r: any) => r.status === reqs[0].status) ? reqs[0].status : 'Mixed';
+                  const requestedAt = new Date(Math.min(...reqs.map((r: any) => new Date(r.requested_at).getTime()))).toLocaleDateString();
+                  // Status color
+                  const statusColor = status === 'paid' || status === 'approved' ? 'bg-green-100 text-green-800' :
+                    status === 'partial' || status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                    status === 'denied' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800';
                   return (
-                    <tr key={t.transaction_id}
-                    onClick={() => toggleTxn(t.transaction_id)}
-                     className="border-b cursor-pointer dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 ">
-                      {/* Checkbox */}
-                      <td className="px-4 py-2">
+                    <tr key={first.request_id} className="border-b dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                      <td className="px-2 sm:px-4 py-2">
                         <input
                           type="checkbox"
-                          checked={selectedTxns.includes(t.transaction_id)}
-                          onChange={() => toggleTxn(t.transaction_id)}
-                          onClick={e => e.stopPropagation()}
-                          className="w-4 h-4 bg-gray-100 border-gray-300 rounded text-primary-600 focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-700 focus:ring-2 dark:bg-gray-600 dark:border-gray-500"
+                          checked={isSelected}
+                          onChange={() => toggleRequest(first.request_id)}
+                          className="w-3 h-3 sm:w-4 sm:h-4 bg-gray-100 border-gray-300 rounded text-primary-600 focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-700 focus:ring-2 dark:bg-gray-600 dark:border-gray-500"
                         />
                       </td>
-                      {/* Name + Avatar */}
-                      <td className="px-4 py-2 flex items-center">
-                        <img
-                       src={u?.avatar || placeholderImage}
-                       alt={`${u?.user_fname} avatar`}
-                       className="w-5 h-5 rounded-full mr-2 object-cover"
-                        />
-                        {u ? `${u.user_fname} ${u.user_lname}` : `#${t.user_id}`}
+                      <td className="px-2 sm:px-4 py-2">{typeLabel}</td>
+                      <td className="px-2 sm:px-4 py-2">
+                        <div className="max-w-[150px] sm:max-w-none truncate" title={title}>
+                          {title}
+                        </div>
                       </td>
-                      <td className="px-4 py-2">{u?.year ?? '–'}</td>
-                      <td className="px-4 py-2">{u?.section || '–'}</td>
-                      <td className="px-4 py-2">{r?.title || '–'}</td>
-                      <td className="px-4 py-2">₱{r?.amount_due.toFixed(2)}</td>
-                      <td className="px-4 py-2">₱{t.amount_paid.toFixed(2)}</td>
-                      <td className="px-4 py-2">
-                        <span className={`capitalize px-2 py-1 rounded ${
-                          t.payment_status === 'paid' ? 'bg-green-100 text-green-800'
-                          : t.payment_status === 'partial' ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-red-100 text-red-800'}`}>
-                          {t.payment_status}
+                      <td className="px-2 sm:px-4 py-2">
+                        <div className="max-w-[120px] sm:max-w-none truncate" title={requesters}>
+                          {requesters}
+                        </div>
+                      </td>
+                      <td className="px-2 sm:px-4 py-2">
+                        <span className={`capitalize px-2 py-1 rounded ${statusColor} text-xs font-semibold`}>
+                          {status}
                         </span>
                       </td>
-                      <td className="px-4 py-2">{new Date(t.due_date).toLocaleDateString()}</td>
-                      {/* Actions */}
-                      <td className="px-4 py-3 space-x-2 flex items-center">
+                      <td className="px-2 sm:px-4 py-2 text-xs sm:text-sm">{requestedAt}</td>
+                      <td className="px-2 sm:px-4 py-2 space-x-1 sm:space-x-2 flex items-center">
+                       
+                        {/* Preview Button - always shown */}
                         <button
-                         onClick={(e) => {e.stopPropagation(); openEdit(t);}}
-                          className="flex items-center justify-center px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-400 whitespace-nowrap transition-transform duration-200 ease-in-out transform hover:scale-105"
-                        >
-                                <svg aria-hidden="true" className="mr-1 -ml-1 w-5 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
-                                <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" />
-                                </svg>
-                          Edit
-                        </button>
-                        <button
-                         onClick={(e) => {e.stopPropagation(); openUpdate(t);}}
-                          className="flex items-center justify-center px-2 py-2 text-sm bg-secondary-500 text-white rounded-lg hover:bg-secondary-400 whitespace-nowrap transition-transform duration-200 ease-in-out transform hover:scale-105"
-                        >
-                            <svg className="w-4 h-4 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
-                                </svg>
-
-                          Update
-                        </button>
-                        <button
-                                onClick={(e) => {e.stopPropagation(); openPreview(t);}}
-                            className="flex items-center justify-center px-2 py-2 text-sm font-medium text-center text-gray-900 focus:outline-none bg-white rounded-lg border border-gray-200 hover:bg-gray-100 hover:text-primary-400 focus:z-10 focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700 transition-transform duration-200 ease-in-out transform hover:scale-105"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 mr-2 -ml-0.5">
+                          onClick={() => openPreviewDrawer(reqs)}
+                          className="flex items-center justify-center px-2 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm font-medium text-center text-gray-900 focus:outline-none bg-white rounded-lg border border-gray-200 hover:bg-gray-100 hover:text-primary-400 focus:z-10 focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700 transition-transform duration-200 ease-in-out transform hover:scale-105"
+                          >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 -ml-0.5">
                             <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
                             <path fillRule="evenodd" clipRule="evenodd" d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113-1.487 4.471-5.705 7.697-10.677 7.697-4.97 0-9.186-3.223-10.675-7.69a1.762 1.762 0 010-1.113zM17.25 12a5.25 5.25 0 11-10.5 0 5.25 5.25 0 0110.5 0z" />
                             </svg>
-                            Preview
+                          <span className="hidden sm:inline">Preview</span>
                         </button>
-                        <button
-                            onClick={(e) => {e.stopPropagation();
-                                setDeleteTxnId(t.transaction_id);
-                                setIsDeleteModalOpen(true);
-                              }}
-                          className="flex items-center justify-center px-2 py-2 text-sm border border-red-500 text-red-500 rounded-lg hover:bg-red-50  dark:hover:bg-red-900 whitespace-nowrap transition-transform duration-200 ease-in-out transform hover:scale-105"
-                        >
-                               <svg aria-hidden="true" className="w-5 h-4 mr-1.5 -ml-1" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" clipRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"/>
+                         {/* Approve Button - only if pending */}
+                         {status === 'pending' && (
+                          <button
+                            onClick={() => setConfirmAction({action: 'approve', reqs})}
+                            className="flex items-center justify-center px-2 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm font-medium bg-primary-600 text-white rounded-lg hover:bg-primary-400 transition-transform duration-200 ease-in-out transform hover:scale-105"
+                          >
+                            <svg className="w-3 h-3 sm:w-5 sm:h-4 mr-1 sm:mr-1.5 -ml-1 text-white" fill="currentColor" viewBox="0 3 20 20">
+                              <path fillRule="evenodd" d="M15.03 9.684h3.965c.322 0 .64.08.925.232.286.153.532.374.717.645a2.109 2.109 0 0 1 .242 1.883l-2.36 7.201c-.288.814-.48 1.355-1.884 1.355-2.072 0-4.276-.677-6.157-1.256-.472-.145-.924-.284-1.348-.404h-.115V9.478a25.485 25.485 0 0 0 4.238-5.514 1.8 1.8 0 0 1 .901-.83 1.74 1.74 0 0 1 1.21-.048c.396.13.736.397.96.757.225.36.32.788.269 1.211l-1.562 4.63ZM4.177 10H7v8a2 2 0 1 1-4 0v-6.823C3 10.527 3.527 10 4.176 10Z" clipRule="evenodd"/>
                             </svg>
-                          Delete
-                        </button>
+                            <span className="hidden sm:inline">Approve</span>
+                          </button>
+                        )}
+                        {/* Deny Button - only if pending */}
+                        {status === 'pending' && (
+                          <button
+                            onClick={() => setConfirmAction({action: 'deny', reqs})}
+                            className="flex items-center justify-center px-2 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-400 transition-transform duration-200 ease-in-out transform hover:scale-105"
+                          >
+                            <svg className="w-3 h-3 sm:w-5 sm:h-4 mr-1 sm:mr-1.5 -ml-1 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M8.97 14.316H5.004c-.322 0-.64-.08-.925-.232a2.022 2.022 0 0 1-.717-.645 2.108 2.108 0 0 1-.242-1.883l2.36-7.201C5.769 3.54 5.96 3 7.365 3c2.072 0 4.276.678 6.156 1.256.473.145.925.284 1.35.404h.114v9.862a25.485 25.485 0 0 0-4.238 5.514c-.197.376-.516.67-.901.83a1.74 1.74 0 0 1-1.21.048 1.79 1.79 0 0 1-.96-.757 1.867 1.867 0 0 1-.269-1.211l1.562-4.63ZM19.822 14H17V6a2 2 0 1 1 4 0v6.823c0 .65-.527 1.177-1.177 1.177Z" clipRule="evenodd"/>
+                            </svg>
+                            <span className="hidden sm:inline">Deny</span>
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -1322,7 +1460,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                     onClose={() => setIsDeleteModalOpen(false)}
                     size="lg"
                 >
-                    <Modal.Body className="p-4 text-center bg-white dark:bg-gray-800 rounded-lg shadow sm:p-5">
+                    <Modal.Body className="p-4 text-center bg-white dark:bg-gray-700 rounded-lg shadow sm:p-5">
                     <button
                         onClick={() => setIsDeleteModalOpen(false)}
                         className="absolute top-2.5 right-2.5 text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white"
@@ -1883,231 +2021,239 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         </Modal.Body>
         </Modal>
 
-{/* ── PREVIEW TRANSACTION DRAWER ───────────────────────────────────────── */}
-<div
-  className={`fixed inset-0 z-50 ${
-    isPreviewOpen ? 'pointer-events-auto' : 'pointer-events-none'
-  }`}
->
-  {/* overlay */}
-  <div
-    className={`absolute inset-0 bg-black/30 dark:bg-black/50 transition-opacity duration-300 ${
-      isPreviewOpen ? 'opacity-100' : 'opacity-0'
-    }`}
-    onClick={() => setIsPreviewOpen(false)}
-  />
 
-  {/* drawer content */}
-  <div
-    className={`relative z-50 h-full p-4 overflow-y-auto transition-transform duration-300 ease-in-out ${
-      isPreviewOpen ? 'translate-x-0' : '-translate-x-full'
-    } w-full max-w-2xl bg-white dark:bg-gray-800`}
-    onClick={e => e.stopPropagation()}
-  >
-    {previewTransaction && (() => {
-      const t = previewTransaction;
-      const u = userMap[t.user_id]!;
-      const r = requirementMap[t.requirement_id]!;
 
-      return (
-        <>
-          {/* header + close */}
-          <div className="flex justify-between items-center mb-4">
-            <h4 className="text-xl font-semibold text-gray-900 dark:text-white">
-                      Transaction Details
-            </h4>
-            <button
-              onClick={() => setIsPreviewOpen(false)}
-              className="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 
-                     0 011.414 1.414L11.414 10l4.293 4.293a1 1 
-                     0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 
-                     0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 
-                     0 010-1.414z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <span className="sr-only">Close drawer</span>
-            </button>
-          </div>
-
-                  {/* User and Requirement Info */}
-                  <div className="flex items-center space-x-4 mb-6 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                    <img
-                      src={u.avatar || placeholderImage}
-                      alt={`${u.user_fname} ${u.user_lname}`}
-                      className="w-16 h-16 rounded-full object-cover"
-                    />
-                    <div>
-                      <h5 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        {u.user_fname} {u.user_lname}
-                      </h5>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {u.course} {u.year} - {u.section}
-                      </p>
-                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-1">
-                        {r.title}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Transaction ID */}
-                  <div className="mb-6">
-                    <div className="flex items-center justify-start">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Transaction ID</span>
-                      <span className="ml-2 bg-gray-100 dark:bg-gray-700 dark:text-white px-2.5 py-0.5 rounded-full text-xs font-medium">
-                        #{t.transaction_id}
-                      </span>
-                    </div>
-          </div>
-
-          {/* req image */}
-                  {r.req_picture && (
-                    <div className="mb-6">
-              
-            <img
-              src={r.req_picture || ReqplaceholderImage}
-                        alt={r.title}
-              className="w-full h-64 object-cover rounded-lg"
+{/* ── PREVIEW DELETION REQUEST DRAWER ───────────────────────────────────────── */}
+{isPreviewOpen && previewReqs && (
+  <div className={`fixed inset-0 z-50 pointer-events-auto`}>
+    {/* overlay */}
+    <div
+      className="absolute inset-0 bg-black/30 dark:bg-gray-900/60 transition-opacity duration-300 opacity-100"
+      onClick={() => setIsPreviewOpen(false)}
+    />
+    {/* drawer content */}
+    <div
+      className="relative z-50 h-full p-4 overflow-y-auto transition-transform duration-300 ease-in-out translate-x-0 w-full max-w-2xl bg-white dark:bg-gray-800"
+      onClick={e => e.stopPropagation()}
+    >
+      {/* header + close */}
+      <div className="flex justify-between items-center mb-4">
+        <h4 className="text-xl font-semibold text-gray-900 dark:text-white">
+          Deletion Request Details
+        </h4>
+        <button
+          onClick={() => setIsPreviewOpen(false)}
+          className="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white"
+        >
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path
+              fillRule="evenodd"
+              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 011.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+              clipRule="evenodd"
             />
-          </div>
-                  )}
-
-                  {/* Financial details */}
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="col-span-1 p-3 bg-gray-100 rounded-lg dark:bg-gray-700">
-              <dt className="font-semibold text-gray-900 dark:text-white">Amount Due</dt>
-              <dd className="text-gray-500 dark:text-gray-400">₱{r.amount_due.toFixed(2)}</dd>
+          </svg>
+          <span className="sr-only">Close drawer</span>
+        </button>
+      </div>
+      {/* Item info */}
+      {(() => {
+        const first = previewReqs[0];
+        let title = '', typeLabel = '', image = '', userName = '', detailsBlock = null, imageBlock = null;
+        if (first.type === 'user') {
+          const u = users.find(u => u.user_id === first.target_id);
+          title = u ? `${u.user_fname} ${u.user_lname}` : `User #${first.target_id}`;
+          typeLabel = 'Member';
+          image = u?.avatar || placeholderImage;
+          imageBlock = (
+            <div className="flex items-center gap-4 mb-2">
+              <img src={image} alt={title} className="w-16 h-16 rounded-full object-cover border border-gray-200 dark:border-gray-600" />
+              <div className="text-lg font-semibold text-gray-900 dark:text-white">{title}</div>
             </div>
-
-            <div className="col-span-1 p-3 bg-gray-100 rounded-lg dark:bg-gray-700">
-              <dt className="font-semibold text-gray-900 dark:text-white">Amount Paid</dt>
-              <dd className="text-gray-500 dark:text-gray-400">₱{t.amount_paid.toFixed(2)}</dd>
+          );
+          detailsBlock = u && (
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 mb-4">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                <div className="text-gray-500 dark:text-gray-400 uppercase">School ID</div>
+                <div className="font-medium text-gray-900 dark:text-white">{u.school_id}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Email</div>
+                <div className="font-medium text-gray-900 dark:text-white">{u.email}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Course</div>
+                <div className="font-medium text-gray-900 dark:text-white">{u.course}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Year</div>
+                <div className="font-medium text-gray-900 dark:text-white">{u.year}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Section</div>
+                <div className="font-medium text-gray-900 dark:text-white">{u.section}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Role</div>
+                <div className="font-medium text-gray-900 dark:text-white">{u.role}</div>
+              </div>
             </div>
-
-            <div className="col-span-1 p-3 bg-gray-100 rounded-lg dark:bg-gray-700">
-                      <dt className="font-semibold text-gray-900 dark:text-white">Payment Status</dt>
-                      <dd className={`capitalize ${
-                        t.payment_status === 'paid' ? 'text-green-500' 
-                        : t.payment_status === 'partial' ? 'text-yellow-500'
-                        : 'text-red-500'
-                      }`}>
-                        {t.payment_status}
-                      </dd>
+          );
+        } else if (first.type === 'requirement') {
+          const r = feeRequirements.find(r => r.requirement_id === first.target_id);
+          title = r ? r.title : `Requirement #${first.target_id}`;
+          typeLabel = 'Requirement';
+          image = r?.req_picture || ReqplaceholderImage;
+          imageBlock = (
+            <div className="w-full mb-2">
+              <img src={image} alt={title} className="w-full h-36 object-cover rounded-lg border border-gray-200 dark:border-gray-600" />
             </div>
-
-            <div className="col-span-1 p-3 bg-gray-100 rounded-lg dark:bg-gray-700">
-                      <dt className="font-semibold text-gray-900 dark:text-white">Payment Method</dt>
-              <dd className="text-gray-500 dark:text-gray-400">{t.payment_method || '—'}</dd>
+          );
+          detailsBlock = r && (
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 mb-4">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Title</div>
+                <div className="font-medium text-gray-900 dark:text-white">{r.title}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Amount Due</div>
+                <div className="font-medium text-gray-900 dark:text-white">₱{r.amount_due?.toFixed(2)}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Type</div>
+                <div className="font-medium text-gray-900 dark:text-white">{r.requirement_type}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Status</div>
+                <div className="font-medium text-gray-900 dark:text-white">{r.status}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Location</div>
+                <div className="font-medium text-gray-900 dark:text-white">{r.location}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Start</div>
+                <div className="font-medium text-gray-900 dark:text-white">{r.start_datetime ? new Date(r.start_datetime).toLocaleString() : '-'}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">End</div>
+                <div className="font-medium text-gray-900 dark:text-white">{r.end_datetime ? new Date(r.end_datetime).toLocaleString() : '-'}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Date Added</div>
+                <div className="font-medium text-gray-900 dark:text-white">{r.date_added ? new Date(r.date_added).toLocaleString() : '-'}</div>
+              </div>
             </div>
-                  </div>
-
-                  {/* Dates */}
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="col-span-1 p-3 bg-gray-100 rounded-lg dark:bg-gray-700">
-                      <dt className="font-semibold text-gray-900 dark:text-white">Due Date</dt>
-                      <dd className="text-gray-500 dark:text-gray-400">
-                        {new Date(t.due_date).toLocaleDateString(undefined, {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric'
-                        })}
-                      </dd>
-                    </div>
-
-                    <div className="col-span-1 p-3 bg-gray-100 rounded-lg dark:bg-gray-700">
-                      <dt className="font-semibold text-gray-900 dark:text-white">Date Added</dt>
-                      <dd className="text-gray-500 dark:text-gray-400">
-                        {new Date(t.date_added).toLocaleDateString(undefined, {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric'
-                        })}
-                      </dd>
-                    </div>
-                  </div>
-
-                  {/* Description */}
-                  <div className="mb-6">
-                    <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Fee Description</h5>
-                    <div className="p-3 bg-gray-100 rounded-lg dark:bg-gray-700 min-h-[80px]">
-                      <p className="text-gray-500 dark:text-gray-400 whitespace-pre-line">
-                        {t.fee_description || '—'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Verification info */}
-                  <div className="mb-6">
-                    <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Verification</h5>
-                    <div className="p-3 bg-gray-100 rounded-lg dark:bg-gray-700">
-                      <p className="text-gray-500 dark:text-gray-400">
-                        {t.verified_by ? 
-                          userMap[t.verified_by] ? 
-                            `Verified by: ${userMap[t.verified_by].user_fname} ${userMap[t.verified_by].user_lname}` 
-                            : `Verified by ID: ${t.verified_by}` 
-                          : 'Not verified'}
-                      </p>
-                    </div>
-                  </div>
-
-          {/* footer buttons */}
-          <div className="flex space-x-4 mt-8">
-            <Button
-              onClick={() => {
-                setIsPreviewOpen(false);
-                openEdit(t);
-              }}
-                      className="w-full bg-primary-600 hover:bg-primary-400 py-1"
-                    >
-                      <div className="flex items-center justify-center">
-                        <svg className="w-5 h-5 mr-2 mt-0" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z"/>
-                          <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd"/>
-                        </svg>
-                        <span className="text-base font-medium">Edit</span>
-                      </div>
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        setIsPreviewOpen(false);
-                        openUpdate(t);
-                      }}
-                      className="w-full bg-secondary-500 hover:bg-secondary-400 py-1"
-                    >
-                      <div className="flex items-center justify-center">
-                        <svg className="w-5 h-5 mr-2 mt-0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
-                        </svg>
-                        <span className="text-base font-medium">Update</span>
-                      </div>
-            </Button>
-            <Button
-              color="failure"
-              onClick={() => {
-                setIsPreviewOpen(false);
-                setDeleteTxnId(t.transaction_id);
-                setIsDeleteModalOpen(true);
-              }}
-                      className="w-full py-1"
-                    >
-                      <div className="flex items-center justify-center">
-                        <svg className="w-5 h-5 mr-2 mt-0" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" clipRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"/>
-                        </svg>
-                        <span className="text-base font-medium">Delete</span>
-                      </div>
-            </Button>
-          </div>
-        </>
-      );
-    })()}
+          );
+        } else if (first.type === 'transaction') {
+          const t = transactions.find(t => t.transaction_id === first.target_id);
+          let r = t ? feeRequirements.find(r => r.requirement_id === t.requirement_id) : null;
+          const u = t ? users.find(u => u.user_id === t.user_id) : null;
+          userName = u ? `${u.user_fname} ${u.user_lname}` : `User #${t?.user_id ?? ''}`;
+          const reqTitle = r ? r.title : `Txn #${t?.transaction_id ?? first.target_id}`;
+          title = `${reqTitle} for ${userName}`;
+          typeLabel = 'Transaction';
+          image = r?.req_picture || ReqplaceholderImage;
+          imageBlock = (
+            <div className="w-full mb-2">
+              <img src={image} alt={reqTitle} className="w-full h-36 object-cover rounded-lg border border-gray-200 dark:border-gray-600" />
+            </div>
+          );
+          detailsBlock = t && (
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 mb-4">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Fee</div>
+                <div className="font-medium text-gray-900 dark:text-white">{reqTitle}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Student</div>
+                <div className="font-medium text-gray-900 dark:text-white">{userName}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Amount Due</div>
+                <div className="font-medium text-gray-900 dark:text-white">₱{t.amount_due?.toFixed(2)}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Amount Paid</div>
+                <div className="font-medium text-gray-900 dark:text-white">₱{t.amount_paid?.toFixed(2)}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Payment Status</div>
+                <div className={`font-medium capitalize ${t.payment_status === 'paid' ? 'text-green-500' : t.payment_status === 'partial' ? 'text-yellow-500' : 'text-red-500'}`}>{t.payment_status}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Payment Method</div>
+                <div className="font-medium text-gray-900 dark:text-white">{t.payment_method || '—'}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Due Date</div>
+                <div className="font-medium text-gray-900 dark:text-white">{t.due_date ? new Date(t.due_date).toLocaleDateString() : '-'}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Date Added</div>
+                <div className="font-medium text-gray-900 dark:text-white">{t.date_added ? new Date(t.date_added).toLocaleDateString() : '-'}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Fee Description</div>
+                <div className="font-medium text-gray-900 dark:text-white">{t.fee_description || '—'}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Verified By</div>
+                <div className="font-medium text-gray-900 dark:text-white">{t.verified_by ? (userMap[t.verified_by] ? `${userMap[t.verified_by].user_fname} ${userMap[t.verified_by].user_lname}` : `ID: ${t.verified_by}`) : 'Not verified'}</div>
+              </div>
+            </div>
+          );
+        } else {
+          title = `#${first.target_id}`;
+          typeLabel = first.type;
+          image = '';
+          imageBlock = null;
+          detailsBlock = null;
+        }
+        return (
+          <>
+            {imageBlock}
+            {detailsBlock}
+          </>
+        );
+      })()}
+      {/* All requesters */}
+      <div className="mb-6 min-h-[240px] max-h-72 overflow-y-auto pr-2">
+        <h5 className="text-base font-semibold text-gray-900 dark:text-white mb-2">Requesters</h5>
+        <div className="space-y-4">
+          {previewReqs.map((req, idx) => {
+            const u = users.find(u => u.user_id === req.requested_by);
+            return (
+              <div key={req.request_id} className="flex items-center gap-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 shadow-sm">
+                <img src={u?.avatar || placeholderImage} alt={u ? `${u.user_fname} ${u.user_lname}` : 'User'} className="w-12 h-12 rounded-full object-cover" />
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900 dark:text-white">{u ? `${u.user_fname} ${u.user_lname}` : `User #${req.requested_by}`}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Requested at: {new Date(req.requested_at).toLocaleString()}</div>
+                  <div className="text-sm text-gray-700 dark:text-gray-300"><span className="font-semibold">Reason:</span> {req.reason || <span className="italic text-gray-400">No reason provided</span>}</div>
+                </div>
+                <span className={`capitalize px-2 py-1 rounded text-xs font-semibold ${
+                  req.status === 'approved' ? 'bg-green-100 text-green-800' :
+                  req.status === 'denied' ? 'bg-red-100 text-red-800' :
+                  'bg-yellow-100 text-yellow-800'
+                }`}>{req.status}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {/* Approve/Deny buttons sticky at bottom, side by side, at page bottom */}
+      <div className="sticky bottom-0 bg-white dark:bg-gray-800 py-4 flex flex-row gap-4 border-t border-gray-200 dark:border-gray-700 z-10 justify-end">
+        <button
+          onClick={() => { setConfirmAction({action: 'approve', reqs: previewReqs}); setConfirmFromPreview(true); }}
+          className="flex-1 flex items-center justify-center px-6 py-3 text-base font-medium bg-primary-600 text-white rounded-lg hover:bg-primary-400 transition-transform duration-200 ease-in-out transform hover:scale-105 shadow"
+        >
+          <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 3 20 20">
+            <path fillRule="evenodd" d="M15.03 9.684h3.965c.322 0 .64.08.925.232.286.153.532.374.717.645a2.109 2.109 0 0 1 .242 1.883l-2.36 7.201c-.288.814-.48 1.355-1.884 1.355-2.072 0-4.276-.677-6.157-1.256-.472-.145-.924-.284-1.348-.404h-.115V9.478a25.485 25.485 0 0 0 4.238-5.514 1.8 1.8 0 0 1 .901-.83 1.74 1.74 0 0 1 1.21-.048c.396.13.736.397.96.757.225.36.32.788.269 1.211l-1.562 4.63ZM4.177 10H7v8a2 2 0 1 1-4 0v-6.823C3 10.527 3.527 10 4.176 10Z" clipRule="evenodd"/>
+        </svg>
+          Approve
+        </button>
+        <button
+          onClick={() => { setConfirmAction({action: 'deny', reqs: previewReqs}); setConfirmFromPreview(true); }}
+          className="flex-1 flex items-center justify-center px-6 py-3 text-base font-medium text-white bg-red-500 rounded-lg hover:bg-red-400 transition-transform duration-200 ease-in-out transform hover:scale-105 shadow"
+        >
+          <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M8.97 14.316H5.004c-.322 0-.64-.08-.925-.232a2.022 2.022 0 0 1-.717-.645 2.108 2.108 0 0 1-.242-1.883l2.36-7.201C5.769 3.54 5.96 3 7.365 3c2.072 0 4.276.678 6.156 1.256.473.145.925.284 1.35.404h.114v9.862a25.485 25.485 0 0 0-4.238 5.514c-.197.376-.516.67-.901.83a1.74 1.74 0 0 1-1.21.048 1.79 1.79 0 0 1-.96-.757 1.867 1.867 0 0 1-.269-1.211l1.562-4.63ZM19.822 14H17V6a2 2 0 1 1 4 0v6.823c0 .65-.527 1.177-1.177 1.177Z" clipRule="evenodd"/>
+        </svg>
+          Deny
+        </button>
+      </div>
+    </div>
   </div>
-</div>
+)}
+
+{confirmAction && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-80">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
+      <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white text-center">
+        {confirmAction.action === 'approve' ? 'Approve' : 'Deny'} Deletion Request{confirmAction.reqs.length > 1 ? 's' : ''}?
+      </h3>
+      <p className="mb-6 text-gray-600 dark:text-gray-300 text-base text-center">
+        Are you sure you want to {confirmAction.action} {confirmAction.reqs.length > 1 ? 'these requests' : 'this request'}? This action cannot be undone.
+      </p>
+      <div className="flex justify-center items-center space-x-4 mt-4">
+        <button
+          className="transition-colors duration-300 py-2 px-5 text-sm font-medium text-gray-500 bg-white rounded-lg border border-gray-200 hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-primary-300 hover:text-gray-900 focus:z-10 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-500 dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-600"
+          onClick={() => { setConfirmAction(null); setConfirmFromPreview(false); }}
+        >
+          Cancel
+        </button>
+        <button
+          className={`transition-colors duration-300 py-2 px-5 text-sm font-medium text-center text-white ${confirmAction.action === 'approve' ? 'bg-primary-600 hover:bg-primary-400 focus:ring-primary-300 dark:bg-primary-600 dark:hover:bg-primary-400 dark:focus:ring-primary-800' : 'bg-red-600 hover:bg-red-700 focus:ring-red-300 dark:bg-red-600 dark:hover:bg-red-700 dark:focus:ring-red-900'} rounded-lg`}
+          onClick={async () => {
+            if (confirmAction.action === 'approve') await handleApprove(confirmAction.reqs);
+            else await handleDeny(confirmAction.reqs);
+            setConfirmAction(null); setConfirmFromPreview(false);
+            if (isPreviewOpen && confirmFromPreview) setIsPreviewOpen(false);
+          }}
+        >
+          Yes, {confirmAction.action === 'approve' ? 'approve' : 'deny'}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
         
       </div>
     </div>

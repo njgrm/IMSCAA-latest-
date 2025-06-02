@@ -2,7 +2,7 @@ import React from 'react';
 
 export interface Filters {
   search: string;
-  roles: Record<'President'|'Officer'|'Member', boolean>;
+  roles: Record<'President' | 'Officer' | 'Member' | 'Adviser', boolean>;
   course: string;
   year: string;
   section: string;
@@ -58,7 +58,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
             <button
               onClick={() => setFilters({
                 search: '',
-                roles: { President: false, Officer: false, Member: false },
+                roles: { President: false, Officer: false, Member: false, Adviser: false },
                 course: '',
                 year: '',
                 section: '',

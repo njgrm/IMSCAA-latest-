@@ -131,17 +131,38 @@
  
 }
 
-.datepicker-popper {
-  z-index: 9999 !important;
-  opacity: 1;
+/* Prevent layout shifts when calendar opens - Updated approach */
+.datepicker-wrapper {
+  position: relative !important;
+  display: inline-block !important;
+  width: 100% !important;
 }
 
-.react-datepicker__day,
-.react-datepicker__day--selected,
-.react-datepicker__day--keyboard-selected,
-.react-datepicker__day--in-selecting-range,
-.react-datepicker__day--in-range,
-.react-datepicker__day--range-start,
-.react-datepicker__day--range-end,
-.react-datepicker__day--today {
+/* Updated popper positioning to allow proper opening while preventing layout shifts */
+.datepicker-popper {
+  z-index: 9999 !important;
+  position: absolute !important;
+  transform-origin: top left !important;
+}
+
+/* Ensure the calendar container doesn't affect layout */
+.react-datepicker-popper {
+  z-index: 9999 !important;
+  position: absolute !important;
+}
+
+/* Prevent any potential scrollbars from affecting layout */
+.react-datepicker {
+  box-sizing: border-box !important;
+}
+
+/* Ensure wrapper maintains its size */
+.react-datepicker-wrapper {
+  display: block !important;
+  width: 100% !important;
+}
+
+.react-datepicker__input-container {
+  display: block !important;
+  width: 100% !important;
 }

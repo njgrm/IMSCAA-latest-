@@ -63,10 +63,14 @@ const navItems: NavItem[] = [
     label: 'Attendance',
     icon: (
       <svg className="w-5 h-5 mr-2 text-current" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-  <path fill-rule="evenodd" d="M8 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1h2a2 2 0 0 1 2 2v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2Zm6 1h-4v2H9a1 1 0 0 0 0 2h6a1 1 0 1 0 0-2h-1V4Zm-3 8a1 1 0 0 1 1-1h3a1 1 0 1 1 0 2h-3a1 1 0 0 1-1-1Zm-2-1a1 1 0 1 0 0 2h.01a1 1 0 1 0 0-2H9Zm2 5a1 1 0 0 1 1-1h3a1 1 0 1 1 0 2h-3a1 1 0 0 1-1-1Zm-2-1a1 1 0 1 0 0 2h.01a1 1 0 1 0 0-2H9Z" clip-rule="evenodd"/>
-</svg>
-
-    )
+        <path fillRule="evenodd" d="M8 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1h2a2 2 0 0 1 2 2v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2Zm6 1h-4v2H9a1 1 0 0 0 0 2h6a1 1 0 1 0 0-2h-1V4Zm-3 8a1 1 0 0 1 1-1h3a1 1 0 1 1 0 2h-3a1 1 0 0 1-1-1Zm-2-1a1 1 0 1 0 0 2h.01a1 1 0 1 0 0-2H9Zm2 5a1 1 0 0 1 1-1h3a1 1 0 1 1 0 2h-3a1 1 0 0 1-1-1Zm-2-1a1 1 0 1 0 0 2h.01a1 1 0 1 0 0-2H9Z" clipRule="evenodd"/>
+      </svg>
+    ),
+    sub: [
+      { to: '/attendance/list',   label: 'List' },
+      { to: '/attendance/config', label: 'Configuration' },
+      { to: '/attendance/scan',   label: 'QR Scanner' },
+    ]
   },
 
   { 
@@ -74,8 +78,8 @@ const navItems: NavItem[] = [
     label: 'Approvals',
     icon: (
       <svg className="w-5 h-5 mr-2 text-current" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-  <path fill-rule="evenodd" d="M15.03 9.684h3.965c.322 0 .64.08.925.232.286.153.532.374.717.645a2.109 2.109 0 0 1 .242 1.883l-2.36 7.201c-.288.814-.48 1.355-1.884 1.355-2.072 0-4.276-.677-6.157-1.256-.472-.145-.924-.284-1.348-.404h-.115V9.478a25.485 25.485 0 0 0 4.238-5.514 1.8 1.8 0 0 1 .901-.83 1.74 1.74 0 0 1 1.21-.048c.396.13.736.397.96.757.225.36.32.788.269 1.211l-1.562 4.63ZM4.177 10H7v8a2 2 0 1 1-4 0v-6.823C3 10.527 3.527 10 4.176 10Z" clip-rule="evenodd"/>
-</svg>
+        <path fillRule="evenodd" d="M15.03 9.684h3.965c.322 0 .64.08.925.232.286.153.532.374.717.645a2.109 2.109 0 0 1 .242 1.883l-2.36 7.201c-.288.814-.48 1.355-1.884 1.355-2.072 0-4.276-.677-6.157-1.256-.472-.145-.924-.284-1.348-.404h-.115V9.478a25.485 25.485 0 0 0 4.238-5.514 1.8 1.8 0 0 1 .901-.83 1.74 1.74 0 0 1 1.21-.048c.396.13.736.397.96.757.225.36.32.788.269 1.211l-1.562 4.63ZM4.177 10H7v8a2 2 0 1 1-4 0v-6.823C3 10.527 3.527 10 4.176 10Z" clipRule="evenodd"/>
+      </svg>
     )
   },
   {
@@ -110,6 +114,7 @@ const Sidebar: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isRequirementsOpen, setIsRequirementsOpen] = useState(false);
   const [openReports, setOpenReports] = useState(false);
+  const [openAttendance, setOpenAttendance] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const itemRefs = useRef<Record<string, HTMLLIElement>>({});
   const [highlight, setHighlight] = useState({ top: 0, height: 0 });
@@ -117,6 +122,7 @@ const Sidebar: React.FC = () => {
   const highlightRef = useRef<HTMLDivElement>(null);
   const [activeItem, setActiveItem] = useState<string | null>(null);
   const [reportsManuallyOpen, setReportsManuallyOpen] = useState(false);
+  const [attendanceManuallyOpen, setAttendanceManuallyOpen] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
@@ -130,6 +136,10 @@ const Sidebar: React.FC = () => {
     if (userRole === 'member') {
       return navItems.filter(item => ['dashboard', 'history'].includes(item.label.toLowerCase()));
     }
+    // Only show Approvals for adviser
+    if (userRole !== 'adviser') {
+      return navItems.filter(item => item.label !== 'Approvals');
+    }
     return navItems;
   }, [userRole]);
 
@@ -137,12 +147,14 @@ const Sidebar: React.FC = () => {
   useEffect(() => {
     let activeKey: string | undefined;
     let reportsHasActive = false;
+    let attendanceHasActive = false;
     for (let itm of filteredNavItems) {
       if (itm.sub) {
         const sub = itm.sub.find(s => pathname.startsWith(s.to));
         if (sub) { 
-          activeKey = sub.to; 
-          reportsHasActive = true;
+          activeKey = sub.to;
+          if (itm.to === '/reports') reportsHasActive = true;
+          if (itm.to === '/attendance') attendanceHasActive = true;
           break; 
         }
       }
@@ -153,20 +165,29 @@ const Sidebar: React.FC = () => {
     }
     // Reset manual open if navigating to a sub-route
     if (reportsHasActive) setReportsManuallyOpen(false);
+    if (attendanceHasActive) setAttendanceManuallyOpen(false);
+    
     setOpenReports(reportsHasActive || reportsManuallyOpen);
+    setOpenAttendance(attendanceHasActive || attendanceManuallyOpen);
+    
     if (activeKey && itemRefs.current[activeKey]) {
       setActiveItem(activeKey);
       const el = itemRefs.current[activeKey]!;
       setHighlight({ top: el.offsetTop, height: el.offsetHeight });
     }
-  }, [pathname, reportsManuallyOpen, filteredNavItems]);
+  }, [pathname, reportsManuallyOpen, attendanceManuallyOpen, filteredNavItems]);
 
   // Only show highlight if the item is visible
   const showHighlight = (() => {
-    // If activeItem is a sub-route of Reports, only show highlight if openReports is true
+    // If activeItem is a sub-route of Reports or Attendance, only show highlight if submenu is open
     const reportsSubRoutes = filteredNavItems.find(i => i.to === '/reports')?.sub?.map(s => s.to) || [];
+    const attendanceSubRoutes = filteredNavItems.find(i => i.to === '/attendance')?.sub?.map(s => s.to) || [];
+    
     if (reportsSubRoutes.includes(activeItem || '')) {
       return openReports;
+    }
+    if (attendanceSubRoutes.includes(activeItem || '')) {
+      return openAttendance;
     }
     return true;
   })();
@@ -247,9 +268,16 @@ const Sidebar: React.FC = () => {
                   <button
                     onClick={() => {
                       // Only allow manual toggle if not on a sub-route
-                      const reportsSubRoutes = filteredNavItems.find(i => i.to === '/reports')?.sub?.map(s => s.to) || [];
-                      const isOnSubRoute = reportsSubRoutes.some(r => pathname.startsWith(r));
-                      if (!isOnSubRoute) setReportsManuallyOpen(o => !o);
+                      const itemSubRoutes = item.sub?.map(s => s.to) || [];
+                      const isOnSubRoute = itemSubRoutes.some(r => pathname.startsWith(r));
+                      
+                      if (!isOnSubRoute) {
+                        if (item.to === '/reports') {
+                          setReportsManuallyOpen(o => !o);
+                        } else if (item.to === '/attendance') {
+                          setAttendanceManuallyOpen(o => !o);
+                        }
+                      }
                     }}
                     className={`w-full flex justify-between items-center px-4 py-2 transition-all duration-200 ease-in-out hover:scale-[1.02] transform group ${
                       isActive 
@@ -274,16 +302,17 @@ const Sidebar: React.FC = () => {
                         isActive 
                           ? 'text-white hover:text-white' 
                           : 'text-gray-800 dark:text-white group-hover:text-primary-400 dark:group-hover:text-primary-400'
-                      } ${openReports ? 'rotate-180' : ''}`}
+                      } ${(item.to === '/reports' && openReports) || (item.to === '/attendance' && openAttendance) ? 'rotate-180' : ''}`}
                       fill="none" stroke="currentColor" viewBox="0 0 24 24"
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d={openReports ? "M19 9l-7 7-7-7" : "M9 5l7 7-7 7"} />
+                        d={(item.to === '/reports' && openReports) || (item.to === '/attendance' && openAttendance) ? "M19 9l-7 7-7-7" : "M9 5l7 7-7 7"} />
                     </svg>
                   </button>
                 ) : (
                   <Link
                     to={item.to}
+                    onClick={() => setSidebarOpen(false)}
                     className={`block px-4 py-2 transition-all duration-200 ease-in-out hover:scale-[1.02] transform group ${
                       isActive 
                         ? 'text-white' 
@@ -309,10 +338,12 @@ const Sidebar: React.FC = () => {
               {item.sub && (
                 <div
                   className={`overflow-hidden transition-all duration-300 ${
-                    openReports ? 'max-h-60 mb-1' : 'max-h-0'
+                    (item.to === '/reports' && openReports) || (item.to === '/attendance' && openAttendance) 
+                      ? 'max-h-60 mb-1' 
+                      : 'max-h-0 -mb-1'
                   }`}
                 >
-                  <ul className="ml-4 space-y-1">
+                  <ul className="ml-7 space-y-1">
                     {item.sub.map(sub => {
                       const isSubActive = activeItem === sub.to;
                       
@@ -326,7 +357,7 @@ const Sidebar: React.FC = () => {
                         >
                           <Link
                             to={sub.to}
-                          
+                            onClick={() => setSidebarOpen(false)}
                             className={`block px-4 py-1 transition-all duration-200 ease-in-out hover:scale-[1.02] transform ${
                               isSubActive 
                                 ? 'text-white hover:text-white' 

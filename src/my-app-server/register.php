@@ -152,9 +152,9 @@ try {
 
   $stmtClub = $pdo->prepare("
     INSERT INTO club 
-      (club_name, description, president_id, category, date_added)
+      (club_name, description, president_id, club_adviser_id, category, date_added)
     VALUES 
-      (?,       '',          NULL,         'academic', NOW())
+      (?,       '',          NULL,         NULL, 'academic', NOW())
   ");
   $stmtClub->execute([$clubName]);
   $clubId = $pdo->lastInsertId();
@@ -166,7 +166,7 @@ try {
       user_fname, user_mname, user_lname,
       user_course, user_year, user_section
     ) VALUES (
-      ?, ?, ?, 'president', ?, ?,
+      ?, ?, ?, 'adviser', ?, ?,
       ?, ?, ?,
       ?, ?, ?
     )
@@ -186,10 +186,9 @@ try {
   ]);
   $userId = $pdo->lastInsertId();
 
-
   $pdo->prepare("
     UPDATE club
-       SET president_id = ?
+       SET club_adviser_id = ?
      WHERE club_id = ?
   ")->execute([$userId, $clubId]);
 

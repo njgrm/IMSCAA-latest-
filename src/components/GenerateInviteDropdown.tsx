@@ -2,21 +2,28 @@ import React, { useState } from "react";
 import { toast } from "react-toastify";
 
 interface GenerateInviteDropdownProps {
-  userRole: "President" | "Officer";
+  userRole: "Adviser" | "President" | "Officer";
 }
 
 const DEFAULT_EXPIRY_HOURS = 24;
 
 const GenerateInviteDropdown: React.FC<GenerateInviteDropdownProps> = ({ userRole }) => {
   const [open, setOpen] = useState(false);
-  const [role, setRole] = useState<"member" | "officer">("member");
+  // Allow adviser to generate adviser, president, officer, member; default adviser
+  // President: officer, member; Officer: member
+  const [role, setRole] = useState<"adviser" | "president" | "officer" | "member">(
+    userRole === "Adviser" ? "adviser" : userRole === "President" ? "officer" : "member"
+  );
   const [allowed, setAllowed] = useState(1);
   const [loading, setLoading] = useState(false);
   const [link, setLink] = useState("");
   const [expiry, setExpiry] = useState(DEFAULT_EXPIRY_HOURS); // in hours
   const [expiryUnit, setExpiryUnit] = useState<'hours' | 'minutes' | 'seconds'>('hours');
 
-  const canGenerateOfficer = userRole === "President";
+  const canGenerateAdviser = userRole === "Adviser";
+  const canGeneratePresident = userRole === "Adviser";
+  const canGenerateOfficer = userRole === "Adviser" || userRole === "President";
+  const canGenerateMember = true;
 
   // Convert expiry to hours for backend
   const getExpiryForBackend = () => {
@@ -87,7 +94,7 @@ const GenerateInviteDropdown: React.FC<GenerateInviteDropdownProps> = ({ userRol
           <h6 className="text-sm font-medium text-black dark:text-white">Invite Link</h6>
           <button
             onClick={() => {
-              setRole("member");
+              setRole(canGenerateAdviser ? "adviser" : canGeneratePresident ? "president" : canGenerateOfficer ? "officer" : "member");
               setAllowed(1);
               setLink("");
               setExpiry(DEFAULT_EXPIRY_HOURS);
@@ -101,18 +108,20 @@ const GenerateInviteDropdown: React.FC<GenerateInviteDropdownProps> = ({ userRol
         {/* Role radio */}
         <div className="mb-3 pt-3 mt-3 border-spacing-2 border-t dark:border-gray-600">
           <p className="text-xs font-medium mb-1">Role</p>
-          <div className="flex gap-4">
-            <label className="flex items-center text-sm mb-1">
-              <input
-                type="radio"
-                name="invite-role"
-                value="member"
-                checked={role === "member"}
-                onChange={() => setRole("member")}
-                className="mr-2 focus:ring-3 focus:ring-primary-400 dark:focus:ring-primary-400 dark:ring-offset-gray-800 rounded text-primary-600 border-gray-300 dark:bg-gray-700 dark:border-gray-600"
-              />
-              Member
-            </label>
+          <div className="flex gap-4 flex-wrap">
+            {canGeneratePresident && (
+              <label className="flex items-center text-sm mb-1">
+                <input
+                  type="radio"
+                  name="invite-role"
+                  value="president"
+                  checked={role === "president"}
+                  onChange={() => setRole("president")}
+                  className="mr-2 focus:ring-3 focus:ring-primary-400 dark:focus:ring-primary-400 dark:ring-offset-gray-800 rounded text-primary-600 border-gray-300 dark:bg-gray-700 dark:border-gray-600"
+                />
+                President
+              </label>
+            )}
             {canGenerateOfficer && (
               <label className="flex items-center text-sm mb-1">
                 <input
@@ -124,6 +133,19 @@ const GenerateInviteDropdown: React.FC<GenerateInviteDropdownProps> = ({ userRol
                   className="mr-2 focus:ring-3 focus:ring-primary-400 dark:focus:ring-primary-400 dark:ring-offset-gray-800 rounded text-primary-600 border-gray-300 dark:bg-gray-700 dark:border-gray-600"
                 />
                 Officer
+              </label>
+            )}
+            {canGenerateMember && (
+              <label className="flex items-center text-sm mb-1">
+                <input
+                  type="radio"
+                  name="invite-role"
+                  value="member"
+                  checked={role === "member"}
+                  onChange={() => setRole("member")}
+                  className="mr-2 focus:ring-3 focus:ring-primary-400 dark:focus:ring-primary-400 dark:ring-offset-gray-800 rounded text-primary-600 border-gray-300 dark:bg-gray-700 dark:border-gray-600"
+                />
+                Member
               </label>
             )}
           </div>

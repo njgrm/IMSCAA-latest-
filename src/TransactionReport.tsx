@@ -302,14 +302,14 @@ const TransactionReport: React.FC = () => {
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 py-14">
       <Sidebar />
-      <div className="flex-1 ml-64 relative flex flex-col">
-        <div className="p-5 pb-0">
+      <div className="flex-1 sm:ml-64 relative flex flex-col">
+        <div className="p-3 sm:px-5 sm:pt-5 sm:pb-1">
           <Breadcrumb items={trail} />
-          <div className="flex items-center justify-between dark:border-gray-700 pt-0 mb-0">
-            <div className="flex-1">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between dark:border-gray-700 pt-0 mb-0 gap-4 sm:gap-0">
+            <div className="flex-1 max-w-md">
               <Searchbar search={search} onSearchChange={setSearch} />
             </div>
-            <div className="flex items-center space-x-2 ml-4 relative">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 ml-0 sm:ml-4 relative">
               <ToastContainer />
               <FilterDropdownTxn
           isOpen={showFilter}
@@ -322,34 +322,35 @@ const TransactionReport: React.FC = () => {
           sections={sections}
               />
               
-             <div className="flex items-center gap-2 dark:text-white">
-              <div id="date-range-picker" className="flex items-center">
-                <DateRangePicker
-                  value={dateRange}
-                  onChange={setDateRange}
-                />
+              <div className="flex items-center gap-2 dark:text-white flex-shrink-0">
+                <div id="date-range-picker" className="flex items-center relative" style={{ minWidth: 'fit-content' }}>
+                  <DateRangePicker
+                    value={dateRange}
+                    onChange={setDateRange}
+                  />
+                </div>
               </div>
-            </div>
 
               <button
                 onClick={handleGenerateReport}
-               className="py-3 bg-primary-600 hover:bg-primary-400 focus:ring-primary-300 px-3 flex items-center text-sm font-medium text-white rounded-lg shadow-md  transition-transform duration-200 ease-in-out transform hover:scale-105"
+               className="py-2 sm:py-3 bg-primary-600 hover:bg-primary-400 focus:ring-primary-300 px-3 flex items-center text-xs sm:text-sm font-medium text-white rounded-lg shadow-md  transition-transform duration-200 ease-in-out transform hover:scale-105"
               >
-                 <svg className="w-5 h-5 mr-1 text-current" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                 <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 text-current" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
         <path fillRule="evenodd" d="M9 7V2.221a2 2 0 0 0-.5.365L4.586 6.5a2 2 0 0 0-.365.5H9Zm2 0V2h7a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9h5a2 2 0 0 0 2-2Zm-1 9a1 1 0 1 0-2 0v2a1 1 0 1 0 2 0v-2Zm2-5a1 1 0 0 1 1 1v6a1 1 0 1 1-2 0v-6a1 1 0 0 1 1-1Zm4 4a1 1 0 1 0-2 0v3a1 1 0 1 0 2 0v-3Z" clipRule="evenodd"/>
       </svg>
-                Generate Report
+                <span className="hidden sm:inline">Generate Report</span>
+                <span className="sm:hidden">Report</span>
               </button>
             </div>
           </div>
         </div>
 
         {/* Table Section */}
-        <div className="flex-1 overflow-auto p-5 pt-0">
+        <div className="flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
           {reportGenerated ? (
             <>
               <div ref={tableRef} className="overflow-x-auto shadow-md relative z-10 mb-8">
-                <table className="min-w-full bg-white dark:bg-gray-800 rounded-t-lg overflow-hidden shadow dark:text-white text-s">
+                <table className="min-w-full bg-white dark:bg-gray-800 rounded-t-lg overflow-hidden shadow dark:text-white text-xs sm:text-sm">
               <thead className="bg-gray-100 dark:bg-gray-700">
                 <tr>
                     {[
@@ -357,7 +358,7 @@ const TransactionReport: React.FC = () => {
                         'Amount Due','Amount Paid','Status',
                         'Due Date','Date Added'
                   ].map(col => (
-                    <th key={col} className="px-4 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">{col}</th>
+                    <th key={col} className="px-2 sm:px-4 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">{col}</th>
                   ))}
                 </tr>
               </thead>
@@ -370,29 +371,49 @@ const TransactionReport: React.FC = () => {
                   const dateObj = t.date ? new Date(t.date.replace(' ', 'T')) : null;
                   return (
                         <tr key={t.transaction_id} className="border-b dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 ">
-                          <td className="px-3.5 py-3.5 flex items-center">
+                          <td className="px-2 sm:px-3.5 py-2 sm:py-3.5 flex items-center">
                         <img
                        src={u?.avatar || placeholderImage}
                        alt={`${u?.user_fname} avatar`}
-                       className="w-5 h-5 rounded-full mr-2 object-cover"
+                       className="w-4 h-4 sm:w-5 sm:h-5 rounded-full mr-1 sm:mr-2 object-cover"
                         />
+                        <div className="max-w-[100px] sm:max-w-none truncate" title={u ? `${u.user_fname} ${u.user_lname}` : `#${t.user_id}`}>
                         {u ? `${u.user_fname} ${u.user_lname}` : `#${t.user_id}`}
+                        </div>
                       </td>
-                          <td className="px-4 py-2">{u?.course ?? '–'}</td>
-                      <td className="px-4 py-2">{u?.year ?? '–'}</td>
-                      <td className="px-4 py-2">{u?.section || '–'}</td>
-                      <td className="px-4 py-2">{r?.title || '–'}</td>
-                      <td className="px-4 py-2">₱{r?.amount_due.toFixed(2)}</td>
-                      <td className="px-4 py-2">₱{t.amount_paid.toFixed(2)}</td>
-                      <td className="px-4 py-2">
-                        <span className={`capitalize px-2 py-1 rounded ${
+                          <td className="px-2 sm:px-4 py-2">{u?.course ?? '–'}</td>
+                      <td className="px-2 sm:px-4 py-2">{u?.year ?? '–'}</td>
+                      <td className="px-2 sm:px-4 py-2">{u?.section || '–'}</td>
+                      <td className="px-2 sm:px-4 py-2">
+                        <div className="max-w-[120px] sm:max-w-none truncate" title={r?.title || '–'}>
+                          {r?.title || '–'}
+                        </div>
+                      </td>
+                      <td className="px-2 sm:px-4 py-2">₱{r?.amount_due.toFixed(2)}</td>
+                      <td className="px-2 sm:px-4 py-2">₱{t.amount_paid.toFixed(2)}</td>
+                      <td className="px-2 sm:px-4 py-2">
+                        <span className={`capitalize px-2 py-1 rounded text-xs font-semibold ${
                           t.payment_status === 'paid' ? 'bg-green-100 text-green-800'
                           : t.payment_status === 'partial' ? 'bg-yellow-100 text-yellow-800'
                               : 'bg-red-100 text-red-800'}`}>{t.payment_status}</span>
                       </td>
-                      <td className="px-4 py-2">{dueDateObj && !isNaN(dueDateObj.getTime()) ? dueDateObj.toLocaleDateString() : '—'}</td>
-                      <td className="px-4 py-2">{dateObj && !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString() : '—'}</td>
-                    </tr>
+                      <td className="px-2 sm:px-4 py-2 text-xs sm:text-sm">
+                        <div className="sm:hidden">
+                          {dueDateObj && !isNaN(dueDateObj.getTime()) ? dueDateObj.toLocaleDateString() : '—'}
+          </div>
+                        <div className="hidden sm:block">
+                          {dueDateObj && !isNaN(dueDateObj.getTime()) ? dueDateObj.toLocaleDateString() : '—'}
+        </div>
+                    </td>
+                      <td className="px-2 sm:px-4 py-2 text-xs sm:text-sm">
+                        <div className="sm:hidden">
+                          {dateObj && !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString() : '—'}
+          </div>
+                        <div className="hidden sm:block">
+                          {dateObj && !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString() : '—'}
+        </div>
+                    </td>
+                  </tr>
                   );
                 })}
               </tbody>

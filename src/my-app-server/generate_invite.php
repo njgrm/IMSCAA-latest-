@@ -53,7 +53,13 @@ $expiry_seconds = (int)round($expiry_hours * 3600);
 $expiry_dt = (new DateTime())->add(new DateInterval('PT' . $expiry_seconds . 'S'))->format('Y-m-d H:i:s');
 
 // Permission check
-if ($user_role === 'president') {
+if ($user_role === 'adviser') {
+  if (!in_array($invite_role, ['adviser', 'president', 'officer', 'member'])) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Invalid role for invite']);
+    exit;
+  }
+} else if ($user_role === 'president') {
   if (!in_array($invite_role, ['officer', 'member'])) {
     http_response_code(403);
     echo json_encode(['error' => 'Invalid role for invite']);
@@ -67,7 +73,7 @@ if ($user_role === 'president') {
   }
 } else {
   http_response_code(403);
-  echo json_encode(['error' => 'Only president or officer can generate invites']);
+  echo json_encode(['error' => 'Only adviser, president, or officer can generate invites']);
   exit;
 }
 

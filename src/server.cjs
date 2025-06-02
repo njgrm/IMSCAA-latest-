@@ -22,6 +22,15 @@ app.post('/notify-registration', (req, res) => {
   res.json({ ok: true });
 });
 
+// New: Notify on deletion request status change
+app.post('/notify-deletion-request-status', (req, res) => {
+  const { clubId, requestId, status, type, targetId, requestedBy, approvedBy, approvedAt } = req.body;
+  io.to(`club_${clubId}`).emit('deletionRequestStatus', {
+    requestId, status, type, targetId, requestedBy, approvedBy, approvedAt
+  });
+  res.json({ ok: true });
+});
+
 // When a dashboard connects, join their club room
 io.on('connection', (socket) => {
   socket.on('joinClub', (clubId) => {

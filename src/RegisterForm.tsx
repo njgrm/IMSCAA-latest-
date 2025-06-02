@@ -26,6 +26,13 @@ const RegisterForm: React.FC = () => {
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [inviteChecked, setInviteChecked] = useState(false);
 
+  const [adviserMode, setAdviserMode] = useState(false);
+  useEffect(() => {
+    // If not invite-based, this is club creation, so adviser
+    if (!inviteToken && !inviteInfo) setAdviserMode(true);
+    else setAdviserMode(false);
+  }, [inviteToken, inviteInfo]);
+
   const toggleCheckbox = () => {
     setIsChecked(!isChecked); 
   };
@@ -58,52 +65,53 @@ const RegisterForm: React.FC = () => {
   }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const form = e.target as HTMLFormElement;
+  e.preventDefault();
+  const form = e.target as HTMLFormElement;
 
-    const newPassword = (form.elements.namedItem('password') as HTMLInputElement).value;
-    const confirm = (form.elements.namedItem('confirmPassword') as HTMLInputElement).value;
+  const newPassword = (form.elements.namedItem('password') as HTMLInputElement).value;
+  const confirm = (form.elements.namedItem('confirmPassword') as HTMLInputElement).value;
 
-    setPasswordMismatch(false);
-    setMessage('');
-    setMessageType('');
+  setPasswordMismatch(false);
+  setMessage('');
+  setMessageType('');
 
-    if (newPassword !== confirm) {
-      setPasswordMismatch(true);
-      return;
-    }
+  if (newPassword !== confirm) {
+    setPasswordMismatch(true);
+    return;
+  }
 
-    const payload = {
-      school_id: (form.elements.namedItem('school_id') as HTMLInputElement).value,
-      fname: (form.elements.namedItem('fname') as HTMLInputElement).value,
-      mname: (form.elements.namedItem('mname') as HTMLInputElement).value,
-      lname: (form.elements.namedItem('lname') as HTMLInputElement).value,
-      email: (form.elements.namedItem('email') as HTMLInputElement).value,
-      course: (form.elements.namedItem('course') as HTMLSelectElement).value,
-      year: (form.elements.namedItem('year') as HTMLInputElement).value,
-      section: (form.elements.namedItem('section') as HTMLInputElement).value,
-      password: newPassword,
-      ...(inviteInfo ? { invite_token: inviteToken } : { club: (form.elements.namedItem('club') as HTMLInputElement).value })
-    };
+  const payload = {
+    school_id: (form.elements.namedItem('school_id') as HTMLInputElement).value,
+    fname: (form.elements.namedItem('fname') as HTMLInputElement).value,
+    mname: (form.elements.namedItem('mname') as HTMLInputElement).value,
+    lname: (form.elements.namedItem('lname') as HTMLInputElement).value,
+    email: (form.elements.namedItem('email') as HTMLInputElement).value,
+      course: adviserMode ? 'N/A' : (form.elements.namedItem('course') as HTMLSelectElement).value,
+      year: adviserMode ? 'N/A' : (form.elements.namedItem('year') as HTMLInputElement).value,
+      section: adviserMode ? 'N/A' : (form.elements.namedItem('section') as HTMLInputElement).value,
+    password: newPassword,
+      ...(inviteInfo ? { invite_token: inviteToken } : { club: (form.elements.namedItem('club') as HTMLInputElement).value }),
+      ...(!inviteInfo && { role: adviserMode ? 'adviser' : 'president' })
+  };
 
     try {
-      const res = await fetch('http://localhost/my-app-server/register.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+  const res = await fetch('http://localhost/my-app-server/register.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 
-      if (res.ok) {
-        const body = await res.json();
+  if (res.ok) {
+    const body = await res.json();
         toast.success('Account created successfully! Redirecting to login...', { autoClose: 5000 });
         setTimeout(() => window.location.href = '/login', 5000);
-      } else {
-        const err = await res.json();
+  } else {
+    const err = await res.json();
         toast.error(err.error || 'Registration failed');
       }
     } catch (e) {
       toast.error('Network error');
-    }
+  }
   };
 
   const getHeading = () => {
@@ -111,8 +119,9 @@ const RegisterForm: React.FC = () => {
       if (inviteInfo.role === 'officer') return 'Sign Up as a Club Officer';
       if (inviteInfo.role === 'member') return 'Sign Up as a Club Member';
     }
+    if (adviserMode) return 'Sign Up as a Club Adviser';
     return 'Sign Up as a Club President';
-  };
+};
 
   return (
     <section className="custom-background bg-gray-50 dark:bg-gray-900 min-h-screen relative overflow-hidden">
@@ -223,136 +232,156 @@ const RegisterForm: React.FC = () => {
 
             {/* Registration Form: Two-Column Layout */}
             {(!inviteChecked || inviteInfo !== null) && (
-              <form className="space-y-4" onSubmit={handleSubmit}>
-              {/* School ID */}
-              <div>
-                <label 
+            <form className="space-y-4" onSubmit={handleSubmit}>
+            {/* School ID */}
+            <div>
+              <label 
                   htmlFor="school_id"
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  School ID
+                className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+              >
+                School ID
+              </label>
+              <input
+                type="text"
+                name="school_id"
+                id="school_id"
+                placeholder="Enter your school ID"
+                className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                required
+              />
+            </div>
+
+            {/* Name Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                  First Name
                 </label>
                 <input
                   type="text"
-                  name="school_id"
-                  id="school_id"
-                  placeholder="Enter your school ID"
+                  name="fname"
+                  id="fname"
+                  placeholder="Enter first name"
                   className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                   required
                 />
               </div>
-
-              {/* Name Fields */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
-                    First Name
-                  </label>
-                  <input
-                    type="text"
-                    name="fname"
-                    id="fname"
-                    placeholder="Enter first name"
-                    className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
-                    Middle Initial
-                  </label>
-                  <input
-                    type="text"
-                    name="mname"
-                    id="mname"
-                    placeholder="M.I."
-                    maxLength={1}
-                    className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
-                    Last Name
-                  </label>
-                  <input
-                    type="text"
-                    name="lname"
-                    id="lname"
-                    placeholder="Enter last name"
-                    className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Email */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
-                  Email
+                  Middle Initial
                 </label>
                 <input
-                  type="email"
-                  name="email"
-                  id="email"
-                  placeholder="Enter your email"
+                  type="text"
+                  name="mname"
+                  id="mname"
+                  placeholder="M.I."
+                  maxLength={1}
+                  className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                  Last Name
+                </label>
+                <input
+                  type="text"
+                  name="lname"
+                  id="lname"
+                  placeholder="Enter last name"
                   className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                   required
                 />
               </div>
+            </div>
 
-              {/* Course */}
+            {/* Email */}
+              {adviserMode ? (
+                <div>
+                  <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    id="email"
+                    placeholder="Enter your email"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                    required
+                  />
+                </div>
+              ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                Email
+              </label>
+              <input
+                type="email"
+                name="email"
+                id="email"
+                placeholder="Enter your email"
+                className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                required
+              />
+            </div>
+            {/* Course */}
+              {!adviserMode && (
+            <div>
+              <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                Course
+              </label>
+              <select
+                name="course"
+                id="course"
+                className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                required
+              >
+                <option value="">Select Course</option>
+                <option value="BS Information Technology">BS Information Technology</option>
+                <option value="BS Information Systems">BS Information Systems</option>
+                <option value="BS Electrical Engineering">BS Electrical Engineering</option>
+                <option value="BS Computer Engineering">BS Computer Engineering</option>
+                <option value="BTVTED">BTVTED</option>
+                <option value="Bachelor in Industrial Technology">Bachelor in Industrial Technology</option>
+              </select>
+            </div>
+              )}
+            </div>
+              )}
+
+          
+
+            {/* Year and Section */}
+              {!adviserMode && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
-                  Course
+                  Year
                 </label>
-                <select
-                  name="course"
-                  id="course"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                <input
+                  type="text"
+                  name="year"
+                  id="year"
+                  placeholder="Enter year level"
+                  className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                   required
-                >
-                  <option value="">Select Course</option>
-                  <option value="BS Information Technology">BS Information Technology</option>
-                  <option value="BS Information Systems">BS Information Systems</option>
-                  <option value="BS Electrical Engineering">BS Electrical Engineering</option>
-                  <option value="BS Computer Engineering">BS Computer Engineering</option>
-                  <option value="BTVTED">BTVTED</option>
-                  <option value="Bachelor in Industrial Technology">Bachelor in Industrial Technology</option>
-                </select>
+                />
               </div>
+              <div>
+                <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                  Section
+                </label>
+                <input
+                  type="text"
+                  name="section"
+                  id="section"
+                  placeholder="Enter section"
+                  className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                  required
+                />
               </div>
-
-              {/* Year and Section */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
-                    Year
-                  </label>
-                  <input
-                    type="text"
-                    name="year"
-                    id="year"
-                    placeholder="Enter year level"
-                    className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                    required
-                  />
-                </div>
-                
-                <div>
-                  <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
-                    Section
-                  </label>
-                  <input
-                    type="text"
-                    name="section"
-                    id="section"
-                    placeholder="Enter section"
-                    className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                    required
-                  />
-                </div>
-              </div>
+            </div>
+              )}
 
               {/* Club Name: Only show if not invite-based */}
               {inviteInfo ? (
@@ -368,152 +397,152 @@ const RegisterForm: React.FC = () => {
                   />
                 </div>
               ) : (
-                <div>
-                  <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
-                    Club Name
-                  </label>
-                  <input
-                    type="text"
-                    name="club"
-                    id="club"
-                    placeholder="Enter club name"
-                    className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                    required
-                  />
-                </div>
+            <div>
+              <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                Club Name
+              </label>
+              <input
+                type="text"
+                name="club"
+                id="club"
+                placeholder="Enter club name"
+                className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                required
+              />
+            </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
-                    Password
-                  </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  name="password"
+                  id="password"
+                  placeholder="••••••••"
+                  className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                  required
+                  minLength={8}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <label
+                  htmlFor="confirmPassword"
+                  className={`block mb-2 text-sm font-medium ${
+                    passwordMismatch
+                      ? 'text-red-700 dark:text-red-500'
+                      : 'text-gray-900 dark:text-white'
+                  }`}
+                >
+                  Confirm Password
+                </label>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  id="confirmPassword"
+                  placeholder="••••••••"
+                  className={`bg-gray-50 border ${
+                    passwordMismatch
+                      ? 'border-red-500 text-red-900 placeholder-red-700 focus:ring-red-500 focus:border-red-500 dark:bg-gray-700 dark:border-red-500 dark:text-red-500 dark:placeholder-red-500'
+                      : 'border-gray-300 text-gray-900 focus:ring-primary-600 focus:border-primary-600 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500'
+                  } rounded-lg block w-full p-2.5`}
+                  required
+                  minLength={8}
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    setPasswordMismatch(false);
+                  }}
+                />
+                {passwordMismatch && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-500">
+                    <span className="font-medium">Warning!</span> Passwords do not match
+                  </p>
+                )}
+              </div>
+            </div>
+
+
+              
+                {/* Agreement Section with Custom Checkbox */}
+                <div className="flex items-center space-x-3 space-y-4 mb-6 mt-4">
+                {/* Custom Checkbox */}
+                <div className="flex items-center h-5">
+                  {/* Hidden default checkbox */}
                   <input
-                    type="password"
-                    name="password"
-                    id="password"
-                    placeholder="••••••••"
-                    className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                    id="agreement"
+                    type="checkbox"
+                    className="hidden"
+                    checked={isChecked}
+                    onChange={toggleCheckbox}
                     required
-                    minLength={8}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
                   />
-                </div>
-                
-                <div>
-                  <label
-                    htmlFor="confirmPassword"
-                    className={`block mb-2 text-sm font-medium ${
-                      passwordMismatch
-                        ? 'text-red-700 dark:text-red-500'
-                        : 'text-gray-900 dark:text-white'
+                  {/* Custom checkbox */}
+                  <div
+                    onClick={toggleCheckbox}
+                    className={`w-5 h-5 border border-gray-300 rounded flex items-center justify-center cursor-pointer focus:ring-primary-300 dark:border-gray-600 dark:focus:ring-primary-300 dark:ring-offset-gray-800 ${
+                      isChecked
+                        ? "bg-primary-500 border-primary-500 dark:bg-primary-500 dark:border-primary-500"
+                        : "bg-gray-50 dark:bg-gray-700"
                     }`}
                   >
-                    Confirm Password
-                  </label>
-                  <input
-                    type="password"
-                    name="confirmPassword"
-                    id="confirmPassword"
-                    placeholder="••••••••"
-                    className={`bg-gray-50 border ${
-                      passwordMismatch
-                        ? 'border-red-500 text-red-900 placeholder-red-700 focus:ring-red-500 focus:border-red-500 dark:bg-gray-700 dark:border-red-500 dark:text-red-500 dark:placeholder-red-500'
-                        : 'border-gray-300 text-gray-900 focus:ring-primary-600 focus:border-primary-600 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500'
-                    } rounded-lg block w-full p-2.5`}
-                    required
-                    minLength={8}
-                    value={confirmPassword}
-                    onChange={(e) => {
-                      setConfirmPassword(e.target.value);
-                      setPasswordMismatch(false);
-                    }}
-                  />
-                  {passwordMismatch && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-500">
-                      <span className="font-medium">Warning!</span> Passwords do not match
-                    </p>
-                  )}
-                </div>
-              </div>
-
-
-                
-                  {/* Agreement Section with Custom Checkbox */}
-                  <div className="flex items-center space-x-3 space-y-4 mb-6 mt-4">
-                  {/* Custom Checkbox */}
-                  <div className="flex items-center h-5">
-                    {/* Hidden default checkbox */}
-                    <input
-                      id="agreement"
-                      type="checkbox"
-                      className="hidden"
-                      checked={isChecked}
-                      onChange={toggleCheckbox}
-                      required
-                    />
-                    {/* Custom checkbox */}
-                    <div
-                      onClick={toggleCheckbox}
-                      className={`w-5 h-5 border border-gray-300 rounded flex items-center justify-center cursor-pointer focus:ring-primary-300 dark:border-gray-600 dark:focus:ring-primary-300 dark:ring-offset-gray-800 ${
-                        isChecked
-                          ? "bg-primary-500 border-primary-500 dark:bg-primary-500 dark:border-primary-500"
-                          : "bg-gray-50 dark:bg-gray-700"
+                    <svg
+                      className={`w-3 h-3 text-white transition-opacity duration-200 ${
+                        isChecked ? "opacity-100" : "opacity-0"
                       }`}
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
                     >
-                      <svg
-                        className={`w-3 h-3 text-white transition-opacity duration-200 ${
-                          isChecked ? "opacity-100" : "opacity-0"
-                        }`}
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </div>
+                      <path
+                        fillRule="evenodd"
+                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
                   </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    By signing up, you are creating an IMSCCA account, and you agree
-                    to IMSCCA&apos;s{" "}
-                    <a
-                      href="#"
-                      className="font-medium text-primary-600 hover:underline dark:text-primary-600"
-                    >
-                      Terms of Use
-                    </a>{" "}
-                    and{" "}
-                    <a
-                      href="#"
-                      className="font-medium text-primary-600 hover:underline dark:text-primary-600"
-                    >
-                      Privacy Policy
-                    </a>
-                    .
-                  </p>
                 </div>
-
-                <button
-                  type="submit"
-                  className="w-full text-white bg-primary-600 hover:bg-primary-400 transform hover:scale-105 transition-all duration-300 ease-in-out focus:ring-4 focus:outline-none focus:ring-primary-300 font-medium rounded-lg text-xl px-5 py-3 text-center dark:bg-primary-600 dark:hover:bg-primary-400 dark:focus:ring-primary-800"
-                >
-                  Sign Up
-                </button>
-                <p className="text-sm font-light text-gray-500 dark:text-gray-400 text-center">
-                  Already have an account?{" "}
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  By signing up, you are creating an IMSCCA account, and you agree
+                  to IMSCCA&apos;s{" "}
                   <a
-                    href="/login"
+                    href="#"
                     className="font-medium text-primary-600 hover:underline dark:text-primary-600"
                   >
-                    Log In
+                    Terms of Use
+                  </a>{" "}
+                  and{" "}
+                  <a
+                    href="#"
+                    className="font-medium text-primary-600 hover:underline dark:text-primary-600"
+                  >
+                    Privacy Policy
                   </a>
+                  .
                 </p>
-              </form>
-            )}
+              </div>
+
+              <button
+                type="submit"
+                className="w-full text-white bg-primary-600 hover:bg-primary-400 transform hover:scale-105 transition-all duration-300 ease-in-out focus:ring-4 focus:outline-none focus:ring-primary-300 font-medium rounded-lg text-xl px-5 py-3 text-center dark:bg-primary-600 dark:hover:bg-primary-400 dark:focus:ring-primary-800"
+              >
+                Sign Up
+              </button>
+              <p className="text-sm font-light text-gray-500 dark:text-gray-400 text-center">
+                Already have an account?{" "}
+                <a
+                  href="/login"
+                  className="font-medium text-primary-600 hover:underline dark:text-primary-600"
+                >
+                  Log In
+                </a>
+              </p>
+            </form>
+)}
           </div>
         </div>
       </div>

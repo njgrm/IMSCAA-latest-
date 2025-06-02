@@ -24,11 +24,12 @@ $role = strtolower($_SESSION['role']);
 
 try {
     $pdo = new PDO("mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4", "root", "", [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $order = "FIELD(dr.status, 'pending', 'approved', 'denied'), dr.approved_at DESC, dr.requested_at DESC";
     if ($role === 'adviser') {
-        $stmt = $pdo->prepare("SELECT dr.*, u.user_fname AS requested_by_fname, u.user_lname AS requested_by_lname FROM deletion_requests dr JOIN users u ON dr.requested_by = u.user_id WHERE dr.club_id = ? AND dr.status = 'pending' ORDER BY dr.requested_at DESC");
+        $stmt = $pdo->prepare("SELECT dr.*, u.user_fname AS requested_by_fname, u.user_lname AS requested_by_lname FROM deletion_requests dr JOIN users u ON dr.requested_by = u.user_id WHERE dr.club_id = ? ORDER BY $order");
         $stmt->execute([$club_id]);
     } else {
-        $stmt = $pdo->prepare("SELECT dr.*, u.user_fname AS requested_by_fname, u.user_lname AS requested_by_lname FROM deletion_requests dr JOIN users u ON dr.requested_by = u.user_id WHERE dr.club_id = ? AND dr.requested_by = ? ORDER BY dr.requested_at DESC");
+        $stmt = $pdo->prepare("SELECT dr.*, u.user_fname AS requested_by_fname, u.user_lname AS requested_by_lname FROM deletion_requests dr JOIN users u ON dr.requested_by = u.user_id WHERE dr.club_id = ? AND dr.requested_by = ? ORDER BY $order");
         $stmt->execute([$club_id, $user_id]);
     }
     $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);

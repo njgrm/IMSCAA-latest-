@@ -14,11 +14,25 @@ import Requirements from './Requirements';
 import Transactions from './Transactions';
 import TransactionReport from './TransactionReport';
 import Approvals from './Approvals';
+import AttendanceList from './AttendanceList';
+import AttendanceConfig from './AttendanceConfig';
+import QRScanner from './QRScanner';
 
 // Type for registration event
 interface RegistrationEvent {
   role: string;
   fullName: string;
+}
+
+// Add this type above AppRoutes
+interface DeletionRequestStatusEvent {
+  requestId: number;
+  status: string;
+  type: string;
+  targetId: number;
+  requestedBy: number;
+  approvedBy: number;
+  approvedAt: string;
 }
 
 const socket = io('http://localhost:3001', { autoConnect: false });
@@ -55,6 +69,31 @@ function AppRoutes() {
           window.dispatchEvent(new Event('member-registered'));
         }
       });
+
+      // Listen for deletion request status changes
+      socket.off('deletionRequestStatus');
+      socket.on('deletionRequestStatus', (payload: DeletionRequestStatusEvent) => {
+        const { requestId, status, type, targetId, requestedBy, approvedBy, approvedAt } = payload;
+        // Only show toast if not on login/register/landing
+        if (!['/login', '/register', '/landing'].includes(location.pathname)) {
+          // Get current user id from localStorage (or fetch if needed)
+          const currentUserId = localStorage.getItem('user_id');
+          const currentRole = (localStorage.getItem('role') || '').toLowerCase();
+          if (String(requestedBy) === String(currentUserId)) {
+            // Notify requester
+            if (status === 'approved') {
+              toast.success('Your deletion request was approved!', { autoClose: 6000 });
+            } else if (status === 'denied') {
+              toast.error('Your deletion request was denied.', { autoClose: 6000 });
+            }
+          } else if (["adviser", "president", "officer"].includes(currentRole)) {
+            // Notify officers/adviser
+            toast.info(`A deletion request was ${status}.`, { autoClose: 6000 });
+          }
+          // Trigger global event for all pages to refresh deletion requests
+          window.dispatchEvent(new Event('deletion-request-status'));
+        }
+      });
     }
   }, [location.pathname, userRole, userClubId]);
 
@@ -83,6 +122,11 @@ function AppRoutes() {
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/reports/transaction-report" element={<TransactionReport />} />
         <Route path="/approvals" element={<Approvals />} />
+        
+        {/* Attendance Routes */}
+        <Route path="/attendance/list" element={<AttendanceList />} />
+        <Route path="/attendance/config" element={<AttendanceConfig />} />
+        <Route path="/attendance/scan" element={<QRScanner />} />
         
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

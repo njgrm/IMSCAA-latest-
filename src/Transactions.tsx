@@ -642,27 +642,170 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
   // Add state for mass delete reason
   const [massDeleteReason, setMassDeleteReason] = useState("");
 
+  const [myDeletionRequests, setMyDeletionRequests] = useState<any[]>([]);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReqId, setCancelReqId] = useState<number | null>(null);
+
+  const fetchMyDeletionRequests = async () => {
+    try {
+      const res = await fetch("http://localhost/my-app-server/get_deletion_requests.php", { credentials: "include" });
+      const data = await res.json();
+      setMyDeletionRequests(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setMyDeletionRequests([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchMyDeletionRequests();
+  }, []);
+
+  const cancelDeletionRequest = async (requestId: number) => {
+    try {
+      const res = await fetch("http://localhost/my-app-server/cancel_deletion_request.php", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ request_id: requestId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("Request cancelled");
+        await fetchMyDeletionRequests();
+        await fetchTransactions();
+      } else {
+        toast.error(data.error || "Failed to cancel request");
+      }
+    } catch (e) {
+      toast.error("Network error");
+    }
+  };
+
+  const handleCancelClick = (requestId: number) => {
+    setCancelReqId(requestId);
+    setShowCancelModal(true);
+  };
+
+  // Place this before the return statement
+  let improvedDeleteModal: React.ReactNode = null;
+  if (isDeleteModalOpen && deleteTxnId) {
+    const t = transactions.find(x => x.transaction_id === deleteTxnId);
+    if (t) {
+      const u = userMap[t.user_id];
+      const r = requirementMap[t.requirement_id];
+      improvedDeleteModal = (
+        <Modal show={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }} size="lg">
+          <Modal.Header className="dark:bg-gray-800">Request Transaction Deletion</Modal.Header>
+          <Modal.Body className="dark:bg-gray-800 dark:text-white rounded">
+            <form className="space-y-6 overflow-y-auto max-h-[80vh]">
+              <div className="rounded-lg shadow bg-white dark:bg-gray-900 p-5 flex flex-col md:flex-row gap-6 items-center border border-gray-200 dark:border-gray-700">
+                <img src={u?.avatar || placeholderImage} alt="Student" className="w-32 h-32 rounded-full object-cover border border-gray-300 dark:border-gray-700" />
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl font-bold text-gray-900 dark:text-white">{u ? `${u.user_fname} ${u.user_lname}` : `#${t.user_id}`}</span>
+                    <span className={`capitalize px-2 py-1 rounded text-xs font-semibold ml-2 ${
+                      t.payment_status === 'paid' ? 'bg-green-100 text-green-800' :
+                      t.payment_status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>{t.payment_status}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-4 mt-2">
+                    <div className="flex items-center gap-1 text-gray-700 dark:text-gray-300">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      <span>{new Date(t.due_date).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-gray-700 dark:text-gray-300">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 0V4m0 7v7" /></svg>
+                      <span>₱{r?.amount_due.toFixed(2) ?? '–'}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-gray-700 dark:text-gray-300">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 12.414a4 4 0 10-1.414 1.414l4.243 4.243a1 1 0 001.414-1.414z" /></svg>
+                      <span>{r?.title || '–'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-yellow-50 dark:bg-yellow-900/30 p-3 rounded-lg border border-yellow-200 dark:border-yellow-700 mb-4">
+                <div className="flex items-center text-yellow-800 dark:text-yellow-200">
+                  <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path>
+                  </svg>
+                  <span className="font-medium">Note:</span>
+                </div>
+                <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                  Deletion will remove this transaction. This action cannot be undone once approved by the adviser.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm mb-1">Reason for deletion (optional)</label>
+                <textarea
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                  value={deleteReason}
+                  onChange={e => setDeleteReason(e.target.value)}
+                  placeholder="e.g. Duplicate, error, etc."
+                  rows={3}
+                />
+              </div>
+              <div className="flex justify-start space-x-2 mt-4">
+                <Button type="button" color="failure" onClick={async () => {
+                  if (!deleteTxnId) return;
+                  try {
+                    await deleteTransaction(deleteTxnId, deleteReason.trim() || "Request to delete transaction.");
+                    toast.success("Delete request sent for approval");
+                    await fetchTransactions();
+                    await fetchMyDeletionRequests(); // <-- Add this line to refresh deletion requests
+                  } catch (err: any) {
+                    toast.error(err.message);
+                  } finally {
+                    setIsDeleteModalOpen(false);
+                    setDeleteTxnId(null);
+                    setDeleteReason("");
+                  }
+                }} className="px-8 bg-red-600 hover:bg-red-700 text-white">
+                  Request Deletion
+                </Button>
+                <Button type="button" color="gray" onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }} className="border border-gray-300 dark:border-gray-600">
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </Modal.Body>
+        </Modal>
+      );
+    }
+  }
+
+  useEffect(() => {
+    const handler = () => {
+      fetchMyDeletionRequests();
+      fetchTransactions && fetchTransactions();
+    };
+    window.addEventListener('deletion-request-status', handler);
+    return () => window.removeEventListener('deletion-request-status', handler);
+  }, []);
+
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 py-14">
       <Sidebar />
-      <div className="flex-1 ml-64 relative flex flex-col">
-        <div className="p-5 pb-0">
+      <div className="flex-1 sm:ml-64 relative flex flex-col">
+        <div className="p-3 sm:px-5 sm:pt-5 sm:pb-1">
           <Breadcrumb items={trail} />
-          <div className="flex items-center justify-between dark:border-gray-700 pt-0 mb-0">
-            <div className="flex-1">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between dark:border-gray-700 pt-0 mb-0 gap-4 sm:gap-0">
+            <div className="flex-1 max-w-md">
               <Searchbar 
                 search={filters.search}
                 onSearchChange={term => setFilters(f => ({ ...f, search: term }))}
               />
             </div>
 
-            <div className="flex items-center space-x-2 ml-4 relative">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 ml-0 sm:ml-4 relative">
               <ToastContainer />
               <Button
                 onClick={openAddModal}
-                className="bg-primary-600 py-1 hover:bg-primary-400 text-white dark:bg-primary-600 dark:hover:bg-primary-400 focus:ring-primary-300 rounded-lg shadow-md transition-transform duration-200 ease-in-out transform hover:scale-105"
+                className="bg-primary-600 py-1 hover:bg-primary-400 text-white dark:bg-primary-600 dark:hover:bg-primary-400 focus:ring-primary-300 rounded-lg shadow-md transition-transform duration-200 ease-in-out transform hover:scale-105 text-xs sm:text-sm px-3 sm:px-4"
               >
-                + Add Transaction
+                <span className="hidden sm:inline">+ Add Transaction</span>
+                <span className="sm:hidden">+ Add</span>
               </Button>
 
                 {/* Mass Edit */}
@@ -728,7 +871,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-5 pt-0">
+        <div className="flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
           <div ref={tableRef} className="overflow-x-auto shadow-md relative z-10">
             <table className="min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow dark:text-white text-s">
               <thead className="bg-gray-100 dark:bg-gray-700">
@@ -755,6 +898,9 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                 {filteredTxns.map(t => {
                   const u = userMap[t.user_id];
                   const r = requirementMap[t.requirement_id];
+                  const myReq = myDeletionRequests.find(
+                    req => req.type === "transaction" && req.target_id === t.transaction_id && req.status === "pending"
+                  );
                   return (
                     <tr key={t.transaction_id}
                     onClick={() => toggleTxn(t.transaction_id)}
@@ -824,18 +970,30 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                             </svg>
                             Preview
                         </button>
-                        <button
+                        {myReq ? (
+                          <button
+                            onClick={() => handleCancelClick(myReq.id)}
+                            className="flex items-center justify-center px-5 py-2 text-sm font-medium text-white rounded-lg bg-red-500 hover:bg-red-400 transition-colors duration-200 ease-in-out transform hover:scale-105"
+                          >
+                            <svg aria-hidden="true" className="w-5 h-4 mr-1.5 -ml-1" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" clipRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"/>
+                            </svg>
+                            Cancel
+                          </button>
+                        ) : (
+                          <button
                             onClick={(e) => {e.stopPropagation();
                                 setDeleteTxnId(t.transaction_id);
                                 setIsDeleteModalOpen(true);
                               }}
-                          className="flex items-center justify-center px-2 py-2 text-sm border border-red-500 text-red-500 rounded-lg hover:bg-red-50  dark:hover:bg-red-900 whitespace-nowrap transition-transform duration-200 ease-in-out transform hover:scale-105"
+                          className="flex items-center justify-center px-4 py-2 text-sm border border-red-500 text-red-500 rounded-lg hover:bg-red-50  dark:hover:bg-red-900 whitespace-nowrap transition-transform duration-200 ease-in-out transform hover:scale-105"
                         >
                                <svg aria-hidden="true" className="w-5 h-4 mr-1.5 -ml-1" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" clipRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"/>
                             </svg>
                           Request
                         </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -1324,70 +1482,48 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         </Modal.Body>
           </Modal>
 
-        {/* Delete confirmation modal */}
-                <Modal
-                    show={isDeleteModalOpen}
-                    onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}
-                    size="lg"
+        {/* Improved Request Deletion Modal for Transaction */}
+        {improvedDeleteModal}
+
+        {/* Cancel Request Confirmation Modal */}
+        {showCancelModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-80">
+            <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
+              <button
+                type="button"
+                className="text-gray-400 absolute top-3 right-3 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white"
+                onClick={() => setShowCancelModal(false)}
+              >
+                <svg aria-hidden="true" className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
+                <span className="sr-only">Close modal</span>
+              </button>
+              <svg className="text-gray-400 dark:text-gray-500 w-11 h-11 mb-3.5 mx-auto" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"></path></svg>
+              <p className="mb-6 text-gray-600 dark:text-gray-300 text-lg font-medium text-center">Are you sure you want to cancel your deletion request?</p>
+              <div className="flex justify-center items-center space-x-4 mt-4">
+                <button
+                  type="button"
+                  className="transition-colors duration-300 py-2 px-5 text-sm font-medium text-gray-500 bg-white rounded-lg border border-gray-200 hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-primary-300 hover:text-gray-900 focus:z-10 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-500 dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-600"
+                  onClick={() => setShowCancelModal(false)}
                 >
-                    <Modal.Header className="dark:bg-gray-800">Request Transaction Deletion</Modal.Header>
-                    <Modal.Body className="dark:bg-gray-800 dark:text-white rounded">
-                        {(() => {
-                          if (!deleteTxnId) return null;
-                          const t = transactions.find(x => x.transaction_id === deleteTxnId);
-                          if (!t) return null;
-                          const u = userMap[t.user_id];
-                          const r = requirementMap[t.requirement_id];
-                          return (
-                            <form className="space-y-6">
-                              {/* Transaction Info */}
-                              <div className="flex items-center space-x-4 mb-2">
-                                <img src={u?.avatar || placeholderImage} className="w-12 h-12 rounded-full object-cover" alt="avatar" />
-                                <div className="space-y-1">
-                                  <div className="font-medium text-gray-900 dark:text-white">{u ? `${u.user_fname} ${u.user_lname}` : `#${t.user_id}`}</div>
-                                  <div className="text-sm text-gray-400">{r?.title || '–'} | ₱{r?.amount_due.toFixed(2) || '–'}</div>
-                                  <div className="text-sm text-gray-400">{t.payment_status} | Paid: ₱{t.amount_paid.toFixed(2)}</div>
-                                  <div className="text-sm text-gray-400">Due: {new Date(t.due_date).toLocaleDateString()}</div>
-                                </div>
-                              </div>
-                              {/* Reason */}
-                              <div>
-                                <label className="block mb-1 text-sm">Reason for deletion (optional)</label>
-                                <textarea
-                                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
-                                  value={deleteReason}
-                                  onChange={e => setDeleteReason(e.target.value)}
-                                  placeholder="e.g. Duplicate, error, etc."
-                                  rows={3}
-                                />
-                              </div>
-                              {/* Buttons */}
-                              <div className="flex justify-start space-x-2 mt-4">
-                                <Button type="button" color="failure" onClick={async () => {
-                                  if (!deleteTxnId) return;
-                                  try {
-                                    await deleteTransaction(deleteTxnId, deleteReason.trim() || "Request to delete transaction.");
-                                    toast.success("Delete request sent for approval");
-                                    await fetchTransactions();
-                                  } catch (err: any) {
-                                    toast.error(err.message);
-                                  } finally {
-                                    setIsDeleteModalOpen(false);
-                                    setDeleteTxnId(null);
-                                    setDeleteReason("");
-                                  }
-                                }} className="px-8 bg-red-600 hover:bg-red-700 text-white">
-                                  Request Deletion
-                                </Button>
-                                <Button type="button" color="gray" onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }} className="border border-gray-300 dark:border-gray-600">
-                                  Cancel
-                                </Button>
-                              </div>
-                            </form>
-                          );
-                        })()}
-                    </Modal.Body>
-                </Modal>
+                  No, keep request
+                </button>
+                <button
+                  type="button"
+                  className="transition-colors duration-300 py-2 px-5 text-sm font-medium text-center text-white bg-red-600 rounded-lg hover:bg-red-700 focus:ring-4 focus:outline-none focus:ring-red-300 dark:bg-red-600 dark:hover:bg-red-700 dark:focus:ring-red-900"
+                  onClick={async () => {
+                    if (cancelReqId != null) {
+                      await cancelDeletionRequest(cancelReqId);
+                    }
+                    setShowCancelModal(false);
+                    setCancelReqId(null);
+                  }}
+                >
+                  Yes, cancel request
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
          {/* ── MASS EDIT Transaction Modal ────────────────── */}
                 <Modal show={isMassEditOpen} onClose={() => setIsMassEditOpen(false)} size="4xl">
