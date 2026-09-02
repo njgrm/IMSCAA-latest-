@@ -1,9 +1,9 @@
-import React, { useEffect, useState, Suspense } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import io from 'socket.io-client';
-import ReactDOM from 'react-dom';
+import { useUser } from './context/UserContext';
 
 import Landing from './landing';
 import LoginForm from './LoginForm';
@@ -17,6 +17,7 @@ import Approvals from './Approvals';
 import AttendanceList from './AttendanceList';
 import AttendanceConfig from './AttendanceConfig';
 import QRScanner from './QRScanner';
+import EventAttendanceReport from './EventAttendanceReport';
 
 // Type for registration event
 interface RegistrationEvent {
@@ -26,36 +27,48 @@ interface RegistrationEvent {
 
 // Add this type above AppRoutes
 interface DeletionRequestStatusEvent {
-  requestId: number;
   status: string;
-  type: string;
-  targetId: number;
   requestedBy: number;
-  approvedBy: number;
-  approvedAt: string;
 }
 
-const socket = io('http://localhost:3001', { autoConnect: false });
+const socket = io(window.location.origin, { autoConnect: false });
 
 const MemberDashboard = React.lazy(() => import('./MemberDashboard'));
 
+const ADMIN_ROLES = ['adviser', 'president', 'officer'];
+
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  allowedRoles?: string[];
+}
+
+function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
+  const { user, userRole, isLoading } = useUser();
+
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const normalizedRole = userRole?.toLowerCase() || '';
+  if (allowedRoles && !allowedRoles.includes(normalizedRole)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  return <ProtectedRoute allowedRoles={ADMIN_ROLES}>{children}</ProtectedRoute>;
+}
+
 function AppRoutes() {
   const location = useLocation();
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const [userClubId, setUserClubId] = useState<number | null>(null);
-
-  useEffect(() => {
-    fetch('http://localhost/my-app-server/get_current_user.php', { credentials: 'include' })
-      .then(res => res.json())
-      .then(user => {
-        setUserRole(user && user.role ? user.role.toLowerCase() : null);
-        setUserClubId(user && user.club_id ? user.club_id : null);
-      })
-      .catch(() => {
-        setUserRole(null);
-        setUserClubId(null);
-      });
-  }, []);
+  const { user, userRole } = useUser();
+  const userClubId = user?.club_id || null;
 
   useEffect(() => {
     if (userClubId) {
@@ -73,12 +86,12 @@ function AppRoutes() {
       // Listen for deletion request status changes
       socket.off('deletionRequestStatus');
       socket.on('deletionRequestStatus', (payload: DeletionRequestStatusEvent) => {
-        const { requestId, status, type, targetId, requestedBy, approvedBy, approvedAt } = payload;
+        const { status, requestedBy } = payload;
         // Only show toast if not on login/register/landing
         if (!['/login', '/register', '/landing'].includes(location.pathname)) {
-          // Get current user id from localStorage (or fetch if needed)
-          const currentUserId = localStorage.getItem('user_id');
-          const currentRole = (localStorage.getItem('role') || '').toLowerCase();
+          // Get current user id from user context
+          const currentUserId = user?.user_id;
+          const currentRole = userRole;
           if (String(requestedBy) === String(currentUserId)) {
             // Notify requester
             if (status === 'approved') {
@@ -86,7 +99,7 @@ function AppRoutes() {
             } else if (status === 'denied') {
               toast.error('Your deletion request was denied.', { autoClose: 6000 });
             }
-          } else if (["adviser", "president", "officer"].includes(currentRole)) {
+          } else if (["adviser", "president", "officer"].includes(currentRole || '')) {
             // Notify officers/adviser
             toast.info(`A deletion request was ${status}.`, { autoClose: 6000 });
           }
@@ -95,7 +108,7 @@ function AppRoutes() {
         }
       });
     }
-  }, [location.pathname, userRole, userClubId]);
+  }, [location.pathname, userRole, userClubId, user]);
 
   return (
     <>
@@ -108,25 +121,28 @@ function AppRoutes() {
         <Route path="/register" element={<RegisterForm />} />
 
         <Route path="/dashboard" element={
-          userRole === 'member' ? (
-            <Suspense fallback={<div className="bg-gray-900 min-h-screen flex items-center justify-center text-white">Loading...</div>}>
-              <MemberDashboard />
-            </Suspense>
-          ) : (
-            <Dashboard />
-          )
+          <ProtectedRoute>
+            {userRole?.toLowerCase() === 'member' ? (
+              <Suspense fallback={<div className="bg-gray-900 min-h-screen flex items-center justify-center text-white">Loading...</div>}>
+                <MemberDashboard />
+              </Suspense>
+            ) : (
+              <Dashboard />
+            )}
+          </ProtectedRoute>
         } />
 
-        <Route path="/members" element={<Crud />} />
-        <Route path="/requirements" element={<Requirements />} />
-        <Route path="/transactions" element={<Transactions />} />
-        <Route path="/reports/transaction-report" element={<TransactionReport />} />
-        <Route path="/approvals" element={<Approvals />} />
+        <Route path="/members" element={<AdminRoute><Crud /></AdminRoute>} />
+        <Route path="/requirements" element={<AdminRoute><Requirements /></AdminRoute>} />
+        <Route path="/transactions" element={<AdminRoute><Transactions /></AdminRoute>} />
+        <Route path="/reports/transaction-report" element={<AdminRoute><TransactionReport /></AdminRoute>} />
+        <Route path="/reports/attendance-report" element={<AdminRoute><EventAttendanceReport /></AdminRoute>} />
+        <Route path="/approvals" element={<ProtectedRoute allowedRoles={['adviser']}><Approvals /></ProtectedRoute>} />
         
         {/* Attendance Routes */}
-        <Route path="/attendance/list" element={<AttendanceList />} />
-        <Route path="/attendance/config" element={<AttendanceConfig />} />
-        <Route path="/attendance/scan" element={<QRScanner />} />
+        <Route path="/attendance/list" element={<AdminRoute><AttendanceList /></AdminRoute>} />
+        <Route path="/attendance/config" element={<AdminRoute><AttendanceConfig /></AdminRoute>} />
+        <Route path="/attendance/scan" element={<AdminRoute><QRScanner /></AdminRoute>} />
         
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

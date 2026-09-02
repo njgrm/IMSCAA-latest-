@@ -4,13 +4,30 @@ const socketIo = require('socket.io');
 const cors = require('cors');
 
 const app = express();
-app.use(cors());
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+
+  try {
+    const { hostname } = new URL(origin);
+    return ['localhost', '127.0.0.1', '::1'].includes(hostname)
+      || hostname.endsWith('.devtunnels.ms');
+  } catch {
+    return false;
+  }
+};
+
+const corsOrigin = (origin, callback) => {
+  callback(null, isAllowedOrigin(origin));
+};
+
+app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(express.json());
 
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: 'http://localhost:5173', 
+    origin: corsOrigin,
+    credentials: true,
     methods: ['GET', 'POST']
   }
 });

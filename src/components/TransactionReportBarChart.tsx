@@ -73,7 +73,7 @@ const TransactionReportBarChart: React.FC<BarChartProps> = ({ data }) => {
       fontSize: '15px',
       labels: { colors: "#6b7280", useSeriesColors: false },
     },
-    colors: ["#059669", "#f59e42", "#dc2626"],
+    colors: ["#059669", "#f59e42", "#f05252"],
     dataLabels: { enabled: false },
     grid: { borderColor: "#e5e7eb", strokeDashArray: 4 },
     tooltip: {

@@ -57,7 +57,7 @@ const FilterDropdownTxn: React.FC<FilterDropdownProps> = ({
       </button>
 
       <div
-        className={`absolute right-0 z-50 mt-2 w-80 px-1 py-4 pb-6 bg-white rounded-lg shadow
+        className={`absolute right-0 z-50 mt-2 w-[min(20rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)] px-1 py-4 pb-6 bg-white rounded-lg shadow
                     dark:bg-gray-700 dark:border-gray-600 border transition-opacity
                     duration-200 origin-top ${
                       isOpen

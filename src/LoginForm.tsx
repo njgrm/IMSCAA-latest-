@@ -8,6 +8,7 @@ import headerLogo from "./assets/headerlogo.png";
 import headerlogoDark from "./assets/headerlogoDark.png";
 import { useNavigate } from "react-router-dom";
 import { Link } from 'react-router-dom';
+import { useUser } from './context/UserContext';
 
 
 const FlowbiteForm: React.FC = () => {
@@ -26,6 +27,7 @@ const FlowbiteForm: React.FC = () => {
 
 
   const navigate = useNavigate();
+  const { refreshUser } = useUser();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -38,7 +40,7 @@ const FlowbiteForm: React.FC = () => {
   
     try {
       const res = await fetch(
-        'http://localhost/my-app-server/login.php',
+        '/my-app-server/login.php',
         {
           method: 'POST',
           credentials: 'include',
@@ -52,6 +54,7 @@ const FlowbiteForm: React.FC = () => {
         localStorage.setItem('user_id', String(body.user_id));
         localStorage.setItem('role', body.role);
         localStorage.setItem('club_id', String(body.club_id));
+        await refreshUser();
         navigate('/dashboard');
       } else {
         const err = await res.json();

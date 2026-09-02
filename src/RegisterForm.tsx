@@ -45,7 +45,7 @@ const RegisterForm: React.FC = () => {
     const token = params.get('invite');
     if (token) {
       setInviteToken(token);
-      fetch(`http://localhost/my-app-server/validate_invite.php?token=${token}`)
+      fetch(`/my-app-server/validate_invite.php?token=${token}`)
         .then(res => res.json())
         .then(data => {
           if (data.valid) {
@@ -95,7 +95,7 @@ const RegisterForm: React.FC = () => {
   };
 
     try {
-  const res = await fetch('http://localhost/my-app-server/register.php', {
+  const res = await fetch('/my-app-server/register.php', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

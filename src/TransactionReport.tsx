@@ -12,6 +12,7 @@ import DateRangePicker from "./components/DateRangePicker";
 import "./theme/react-datepicker-dark.css";
 import TransactionReportBarChart from "./components/TransactionReportBarChart";
 import TransactionReportAreaChart from "./components/TransactionReportAreaChart";
+import { exportToPDF, ExportData } from "./utils/pdfExport";
 
 
 interface Transaction {
@@ -92,7 +93,7 @@ const TransactionReport: React.FC = () => {
 
   const fetchTransactions = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/get_transaction.php", {
+      const res = await fetch("/my-app-server/get_transaction.php", {
         credentials: "include",
       });
       const dataRaw = await res.json();
@@ -109,7 +110,7 @@ const TransactionReport: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/get_user.php", {
+      const res = await fetch("/my-app-server/get_user.php", {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to load users");
@@ -122,7 +123,7 @@ const TransactionReport: React.FC = () => {
   
   const fetchFeeRequirements = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/get_fee_requirement.php", {
+      const res = await fetch("/my-app-server/get_fee_requirement.php", {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to load fees");
@@ -299,10 +300,80 @@ const TransactionReport: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Add export functionality
+  const handleExportPDF = async () => {
+    try {
+      const dateRangeText = dateRange.start && dateRange.end 
+        ? `${new Date(dateRange.start).toLocaleDateString()} - ${new Date(dateRange.end).toLocaleDateString()}`
+        : 'All dates';
+
+      const filterSummary = [
+        filters.statuses.paid && 'Paid',
+        filters.statuses.partial && 'Partial', 
+        filters.statuses.unpaid && 'Unpaid'
+      ].filter(Boolean).join(', ') || 'All statuses';
+
+      const totalAmountDue = sortedTxns.reduce((sum, t) => {
+        const r = requirementMap[t.requirement_id];
+        return sum + (r?.amount_due || 0);
+      }, 0);
+
+      const totalAmountPaid = sortedTxns.reduce((sum, t) => sum + t.amount_paid, 0);
+
+      const paidCount = sortedTxns.filter(t => t.payment_status === 'paid').length;
+      const partialCount = sortedTxns.filter(t => t.payment_status === 'partial').length;
+      const unpaidCount = sortedTxns.filter(t => t.payment_status === 'unpaid').length;
+
+      const exportData: ExportData = {
+        title: 'Transaction Report',
+        subtitle: `Period: ${dateRangeText} | Filters: ${filterSummary}`,
+        statistics: {
+          'Total Transactions': sortedTxns.length,
+          'Total Amount Due': `₱${totalAmountDue.toFixed(2)}`,
+          'Total Amount Paid': `₱${totalAmountPaid.toFixed(2)}`,
+          'Payment Rate': `${(totalAmountPaid / Math.max(totalAmountDue, 1) * 100).toFixed(1)}%`,
+          'Paid Transactions': paidCount,
+          'Partial Transactions': partialCount,
+          'Unpaid Transactions': unpaidCount,
+          'Unique Students': [...new Set(sortedTxns.map(t => t.user_id))].length,
+        },
+        tableHeaders: [
+          'Name', 'Course', 'Year', 'Section', 'Fee Title', 
+          'Amount Due', 'Amount Paid', 'Status', 'Due Date', 'Date Added'
+        ],
+        tableData: sortedTxns.map(t => {
+          const u = userMap[t.user_id];
+          const r = requirementMap[t.requirement_id];
+          const dueDateObj = t.due_date ? new Date(t.due_date.replace(' ', 'T')) : null;
+          const dateObj = t.date ? new Date(t.date.replace(' ', 'T')) : null;
+          
+          return [
+            u ? `${u.user_fname} ${u.user_lname}` : `#${t.user_id}`,
+            u?.course ?? '–',
+            u?.year ?? '–',
+            u?.section || '–',
+            r?.title || '–',
+            `₱${r?.amount_due.toFixed(2) || '0.00'}`,
+            `₱${t.amount_paid.toFixed(2)}`,
+            t.payment_status,
+            dueDateObj && !isNaN(dueDateObj.getTime()) ? dueDateObj.toLocaleDateString() : '—',
+            dateObj && !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString() : '—'
+          ];
+        })
+      };
+
+      await exportToPDF(exportData);
+      toast.success('PDF export initiated');
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export PDF');
+    }
+  };
+
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 py-14">
+    <div className="flex min-h-screen min-w-0 w-full bg-gray-50 dark:bg-gray-900 py-14">
       <Sidebar />
-      <div className="flex-1 sm:ml-64 relative flex flex-col">
+      <div className="flex min-w-0 flex-1 sm:ml-64 relative flex-col">
         <div className="p-3 sm:px-5 sm:pt-5 sm:pb-1">
           <Breadcrumb items={trail} />
           <div className="flex flex-col sm:flex-row sm:items-center justify-between dark:border-gray-700 pt-0 mb-0 gap-4 sm:gap-0">
@@ -322,8 +393,8 @@ const TransactionReport: React.FC = () => {
           sections={sections}
               />
               
-              <div className="flex items-center gap-2 dark:text-white flex-shrink-0">
-                <div id="date-range-picker" className="flex items-center relative" style={{ minWidth: 'fit-content' }}>
+              <div className="flex min-w-0 w-full items-center gap-2 dark:text-white sm:w-auto sm:flex-shrink-0">
+                <div id="date-range-picker" className="relative w-full">
                   <DateRangePicker
                     value={dateRange}
                     onChange={setDateRange}
@@ -341,16 +412,28 @@ const TransactionReport: React.FC = () => {
                 <span className="hidden sm:inline">Generate Report</span>
                 <span className="sm:hidden">Report</span>
               </button>
+
+              {/* Export PDF Button */}
+              <button
+                onClick={handleExportPDF}
+                className="py-2 sm:py-3 bg-red-500 hover:bg-red-700 focus:ring-red-300 px-3 flex items-center text-xs sm:text-sm font-medium text-white rounded-lg shadow-md transition-transform duration-200 ease-in-out transform hover:scale-105"
+              >
+                <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span className="hidden sm:inline">Export PDF</span>
+                <span className="sm:hidden">PDF</span>
+              </button>
             </div>
           </div>
         </div>
 
         {/* Table Section */}
-        <div className="flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
+        <div className="min-w-0 flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
           {reportGenerated ? (
             <>
-              <div ref={tableRef} className="overflow-x-auto shadow-md relative z-10 mb-8">
-                <table className="min-w-full bg-white dark:bg-gray-800 rounded-t-lg overflow-hidden shadow dark:text-white text-xs sm:text-sm">
+              <div ref={tableRef} className="responsive-table-frame shadow-md relative z-10 mb-8">
+                <table className="responsive-table-cards min-w-0 sm:min-w-full bg-white dark:bg-gray-800 rounded-t-lg overflow-hidden shadow dark:text-white text-xs sm:text-sm">
               <thead className="bg-gray-100 dark:bg-gray-700">
                 <tr>
                     {[
@@ -371,7 +454,7 @@ const TransactionReport: React.FC = () => {
                   const dateObj = t.date ? new Date(t.date.replace(' ', 'T')) : null;
                   return (
                         <tr key={t.transaction_id} className="border-b dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 ">
-                          <td className="px-2 sm:px-3.5 py-2 sm:py-3.5 flex items-center">
+                          <td data-label="Name" className="px-2 sm:px-3.5 py-2 sm:py-3.5 flex items-center">
                         <img
                        src={u?.avatar || placeholderImage}
                        alt={`${u?.user_fname} avatar`}
@@ -381,23 +464,23 @@ const TransactionReport: React.FC = () => {
                         {u ? `${u.user_fname} ${u.user_lname}` : `#${t.user_id}`}
                         </div>
                       </td>
-                          <td className="px-2 sm:px-4 py-2">{u?.course ?? '–'}</td>
-                      <td className="px-2 sm:px-4 py-2">{u?.year ?? '–'}</td>
-                      <td className="px-2 sm:px-4 py-2">{u?.section || '–'}</td>
-                      <td className="px-2 sm:px-4 py-2">
+                          <td data-label="Course" className="px-2 sm:px-4 py-2">{u?.course ?? '–'}</td>
+                      <td data-label="Year" className="px-2 sm:px-4 py-2">{u?.year ?? '–'}</td>
+                      <td data-label="Section" className="px-2 sm:px-4 py-2">{u?.section || '–'}</td>
+                      <td data-label="Fee Title" className="px-2 sm:px-4 py-2">
                         <div className="max-w-[120px] sm:max-w-none truncate" title={r?.title || '–'}>
                           {r?.title || '–'}
                         </div>
                       </td>
-                      <td className="px-2 sm:px-4 py-2">₱{r?.amount_due.toFixed(2)}</td>
-                      <td className="px-2 sm:px-4 py-2">₱{t.amount_paid.toFixed(2)}</td>
-                      <td className="px-2 sm:px-4 py-2">
+                      <td data-label="Amount Due" className="px-2 sm:px-4 py-2">₱{r?.amount_due.toFixed(2)}</td>
+                      <td data-label="Amount Paid" className="px-2 sm:px-4 py-2">₱{t.amount_paid.toFixed(2)}</td>
+                      <td data-label="Status" className="px-2 sm:px-4 py-2">
                         <span className={`capitalize px-2 py-1 rounded text-xs font-semibold ${
                           t.payment_status === 'paid' ? 'bg-green-100 text-green-800'
                           : t.payment_status === 'partial' ? 'bg-yellow-100 text-yellow-800'
                               : 'bg-red-100 text-red-800'}`}>{t.payment_status}</span>
                       </td>
-                      <td className="px-2 sm:px-4 py-2 text-xs sm:text-sm">
+                      <td data-label="Due Date" className="px-2 sm:px-4 py-2 text-xs sm:text-sm">
                         <div className="sm:hidden">
                           {dueDateObj && !isNaN(dueDateObj.getTime()) ? dueDateObj.toLocaleDateString() : '—'}
           </div>
@@ -405,7 +488,7 @@ const TransactionReport: React.FC = () => {
                           {dueDateObj && !isNaN(dueDateObj.getTime()) ? dueDateObj.toLocaleDateString() : '—'}
         </div>
                     </td>
-                      <td className="px-2 sm:px-4 py-2 text-xs sm:text-sm">
+                      <td data-label="Date Added" className="px-2 sm:px-4 py-2 text-xs sm:text-sm">
                         <div className="sm:hidden">
                           {dateObj && !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString() : '—'}
           </div>

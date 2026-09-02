@@ -1,5 +1,4 @@
-import React, { useState, useContext, useEffect, useMemo } from "react";
-import { ThemeContext } from './theme/ThemeContext';
+import React, { useState, useEffect, useMemo } from "react";
 import { Button, Modal } from "flowbite-react";
 import Sidebar from './components/Sidebar';
 import { ToastContainer, toast } from 'react-toastify';
@@ -38,8 +37,34 @@ interface TimeSlotForm {
   date: string;
 }
 
+// Utility functions for time format conversion
+const formatTimeTo12Hour = (time24: string): string => {
+  if (!time24) return '';
+  
+  const [hours, minutes] = time24.split(':');
+  const hour = parseInt(hours, 10);
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+  
+  return `${hour12}:${minutes} ${period}`;
+};
+
+// Convert time to HH:MM format for HTML time inputs
+const formatTimeForInput = (time: string): string => {
+  if (!time) return '';
+  
+  // Remove seconds if present (e.g., "08:30:00" -> "08:30")
+  const timeParts = time.split(':');
+  if (timeParts.length >= 2) {
+    const hours = timeParts[0].padStart(2, '0');
+    const minutes = timeParts[1].padStart(2, '0');
+    return `${hours}:${minutes}`;
+  }
+  
+  return time;
+};
+
 const AttendanceConfig: React.FC = () => {
-  const { theme } = useContext(ThemeContext);
   const [events, setEvents] = useState<Event[]>([]);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,46 +93,39 @@ const AttendanceConfig: React.FC = () => {
     { label: 'Configuration' }
   ];
 
-  // Fetch events (only events, not other requirement types)
+  // Fetch events
   const fetchEvents = async () => {
-    setLoading(true);
     try {
-      const response = await fetch('http://localhost/my-app-server/get_requirement.php', {
+      const response = await fetch('/my-app-server/get_requirement.php?type=event', {
         credentials: 'include'
       });
-      
       if (!response.ok) {
         throw new Error('Failed to fetch events');
       }
-      
       const data = await response.json();
-      // Filter only events
-      const eventData = Array.isArray(data) ? data.filter(req => req.requirement_type === 'event') : [];
-      setEvents(eventData);
+      setEvents(Array.isArray(data) ? data : []);
     } catch (error) {
-      toast.error('Failed to load events');
       console.error('Error fetching events:', error);
-    } finally {
-      setLoading(false);
+      toast.error('Failed to load events');
     }
   };
 
   // Fetch time slots
   const fetchTimeSlots = async () => {
     try {
-      const response = await fetch('http://localhost/my-app-server/get_time_slots.php', {
+      const response = await fetch('/my-app-server/get_time_slots.php', {
         credentials: 'include'
       });
-      
       if (!response.ok) {
         throw new Error('Failed to fetch time slots');
       }
-      
       const data = await response.json();
       setTimeSlots(Array.isArray(data) ? data : []);
     } catch (error) {
-      toast.error('Failed to load time slots');
       console.error('Error fetching time slots:', error);
+      toast.error('Failed to load time slots');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -144,7 +162,7 @@ const AttendanceConfig: React.FC = () => {
     if (!selectedEvent) return;
 
     try {
-      const response = await fetch('http://localhost/my-app-server/add_time_slot.php', {
+      const response = await fetch('/my-app-server/add_time_slot.php', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -173,18 +191,24 @@ const AttendanceConfig: React.FC = () => {
     e.preventDefault();
     if (!editingSlot) return;
 
+    const submitData = {
+      slot_id: editingSlot.slot_id,
+      ...slotForm
+    };
+    
+    console.log('Submitting edit data:', submitData);
+
     try {
-      const response = await fetch('http://localhost/my-app-server/update_time_slot.php', {
+      const response = await fetch('/my-app-server/update_time_slot.php', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slot_id: editingSlot.slot_id,
-          ...slotForm
-        })
+        body: JSON.stringify(submitData)
       });
 
       const data = await response.json();
+      console.log('Backend response:', data);
+      
       if (!response.ok) {
         throw new Error(data.error || 'Failed to update time slot');
       }
@@ -195,6 +219,7 @@ const AttendanceConfig: React.FC = () => {
       setSlotForm({ slot_name: '', start_time: '', end_time: '', date: '' });
       await fetchTimeSlots();
     } catch (error: any) {
+      console.error('Edit error:', error);
       toast.error(error.message || 'Failed to update time slot');
     }
   };
@@ -204,7 +229,7 @@ const AttendanceConfig: React.FC = () => {
     if (!deletingSlot) return;
 
     try {
-      const response = await fetch('http://localhost/my-app-server/delete_time_slot.php', {
+      const response = await fetch('/my-app-server/delete_time_slot.php', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -228,7 +253,7 @@ const AttendanceConfig: React.FC = () => {
   // Toggle time slot active status
   const toggleSlotStatus = async (slot: TimeSlot) => {
     try {
-      const response = await fetch('http://localhost/my-app-server/toggle_time_slot.php', {
+      const response = await fetch('/my-app-server/toggle_time_slot.php', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -252,11 +277,15 @@ const AttendanceConfig: React.FC = () => {
 
   // Open edit modal
   const openEditModal = (slot: TimeSlot) => {
+    console.log('Opening edit modal for slot:', slot);
+    console.log('Original start_time:', slot.start_time, 'Formatted:', formatTimeForInput(slot.start_time));
+    console.log('Original end_time:', slot.end_time, 'Formatted:', formatTimeForInput(slot.end_time));
+    
     setEditingSlot(slot);
     setSlotForm({
       slot_name: slot.slot_name,
-      start_time: slot.start_time,
-      end_time: slot.end_time,
+      start_time: formatTimeForInput(slot.start_time),
+      end_time: formatTimeForInput(slot.end_time),
       date: slot.date
     });
     setIsEditSlotModalOpen(true);
@@ -293,9 +322,9 @@ const AttendanceConfig: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 py-14">
+    <div className="flex min-h-screen min-w-0 w-full bg-gray-50 dark:bg-gray-900 py-14">
       <Sidebar />
-      <div className="flex-1 sm:ml-64 relative flex flex-col">
+      <div className="flex min-w-0 flex-1 sm:ml-64 relative flex-col">
         <div className="p-3 sm:px-5 sm:pt-5 sm:pb-1">
           <Breadcrumb items={trail} />
           <div className="flex flex-col sm:flex-row sm:items-center justify-between dark:border-gray-700 pt-0 mb-0 gap-4 sm:gap-0">
@@ -313,7 +342,7 @@ const AttendanceConfig: React.FC = () => {
         </div>
 
         {/* Main content */}
-        <div className="flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
+        <div className="min-w-0 flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
           {loading ? (
             <div className="flex justify-center items-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
@@ -326,7 +355,7 @@ const AttendanceConfig: React.FC = () => {
                   Events ({filteredEvents.length})
                 </h2>
                 
-                <div className="space-y-4 max-h- overflow-y-auto">
+                <div className="space-y-4 max-h-[calc(100dvh-15rem)] overflow-y-auto">
                   {filteredEvents.map(event => {
                     const slots = timeSlots.filter(slot => slot.requirement_id === event.requirement_id);
                     const activeSlots = slots.filter(slot => slot.is_active);
@@ -443,7 +472,7 @@ const AttendanceConfig: React.FC = () => {
                               <svg className="w-4 h-4 text-gray-500 dark:text-primary-400 mr-2" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
                                 <path fillRule="evenodd" d="M2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10S2 17.523 2 12Zm11-4a1 1 0 1 0-2 0v4a1 1 0 0 0 .293.707l3 3a1 1 0 0 0 1.414-1.414L13 11.586V8Z" clipRule="evenodd"/>
                               </svg>
-                              {slot.start_time} - {slot.end_time}
+                              {formatTimeTo12Hour(slot.start_time)} - {formatTimeTo12Hour(slot.end_time)}
                             </div>
                           </div>
                           
@@ -523,7 +552,7 @@ const AttendanceConfig: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Start Time
@@ -607,7 +636,7 @@ const AttendanceConfig: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Start Time

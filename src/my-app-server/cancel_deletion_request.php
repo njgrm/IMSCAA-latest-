@@ -1,7 +1,7 @@
 <?php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
-header("Access-Control-Allow-Origin: http://localhost:5173");
+require_once __DIR__ . '/cors.php';
 header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
@@ -47,7 +47,7 @@ if (!$request_id) {
 try {
     $pdo = get_pdo();
     // Only allow cancel if user is the requester and status is pending
-    $stmt = $pdo->prepare("DELETE FROM deletion_requests WHERE request_id=? AND requested_by=? AND status='pending'");
+    $stmt = $pdo->prepare("DELETE FROM approval_requests WHERE request_id=? AND requested_by=? AND status='pending'");
     $stmt->execute([$request_id, $user_id]);
     if ($stmt->rowCount() > 0) {
         echo json_encode(['success' => true]);

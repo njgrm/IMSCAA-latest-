@@ -125,8 +125,6 @@ import streamline from "./assets/streamline.svg";
   ];
   
   const carouselItems: Card[] = [...cards, ...cards, ...cards,...cards,...cards];
-    
-    
 
                     return (
                       <div
@@ -211,7 +209,7 @@ import streamline from "./assets/streamline.svg";
                 
                 
 
-                    <motion.section
+<motion.section
   id="home"
   initial={{ opacity: 0, y: 50 }}
   whileInView={{ opacity: 1, y: 0 }}
@@ -377,8 +375,8 @@ import streamline from "./assets/streamline.svg";
     className="py-12 px-6 mx-auto max-w-screen-xl text-center lg:py-16 lg:px-12"
   >
     <p className="text-gray-500 dark:text-gray-400 text-lg sm:text-xl md:text-2xl mb-8 pt-[33%]">
-      Say goodbye to cluttered spreadsheets and endless paperwork. <br />
-      Take your campus organization to the next level.
+      <br />
+
     </p>
 
     <div className="relative z-50 flex justify-center">

@@ -32,7 +32,7 @@ interface Student {
   user_mname: string;
   user_lname: string;
   email: string;
-  role: "President" | "Officer" | "Member" | "Adviser";
+  role: "President" | "Officer" | "Member";
   course: string;
   year: string;
   section: string;
@@ -77,7 +77,7 @@ const Crud: React.FC = () => {
   const tableRef = useRef<HTMLDivElement>(null);
   const [filters, setFilters] = useState<Filters>({
     search: '',
-    roles: { President: false, Officer: false, Member: false, Adviser: false },
+    roles: { President: false, Officer: false, Member: false },
     course: '',
     year: '',
     section: '',
@@ -91,6 +91,8 @@ const Crud: React.FC = () => {
   const { theme, setTheme } = useContext(ThemeContext);
   const isDarkMode = theme === "dark";
   const toggleDarkMode = () => setTheme(isDarkMode ? 'light' : 'dark');
+  const [isQRGenerateConfirmOpen, setIsQRGenerateConfirmOpen] = useState(false);
+  const [pendingQRUserId, setPendingQRUserId] = useState<number | null>(null);
 
   const trail: BreadcrumbItem[] = [
     { label: 'Home', to: '/dashboard' },
@@ -117,7 +119,7 @@ const Crud: React.FC = () => {
   const fetchUsers = async () => {
     try {
       const res = await fetch(
-        "http://localhost/my-app-server/get_user.php",
+        "/my-app-server/get_user.php",
         {
           credentials: "include",
         }
@@ -140,10 +142,10 @@ const Crud: React.FC = () => {
     }
   };
 
-  function capitalize(str: string): "President" | "Officer" | "Member" | "Adviser" | null {
+  function capitalize(str: string): "President" | "Officer" | "Member" | null {
     if (!str) return null;
     const s = str[0].toUpperCase() + str.slice(1).toLowerCase();
-    if (s === "President" || s === "Officer" || s === "Member" || s === "Adviser") return s;
+    if (s === "President" || s === "Officer" || s === "Member") return s;
     return null;
   }
   
@@ -154,7 +156,7 @@ const Crud: React.FC = () => {
 
   useEffect(() => {
     // Fetch current user role
-    fetch("http://localhost/my-app-server/get_current_user.php", {
+    fetch("/my-app-server/get_current_user.php", {
       credentials: "include"
     })
       .then(res => res.json())
@@ -210,7 +212,7 @@ const Crud: React.FC = () => {
     if (!form.section.trim()) return toast.error("Section is required!");
 
     try {
-        const res = await fetch("http://localhost/my-app-server/add_user.php", {
+        const res = await fetch("/my-app-server/add_user.php", {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
@@ -278,7 +280,7 @@ const Crud: React.FC = () => {
     if (!form.role.trim()) return toast.error("Role is required!");
   
     try {
-      const res = await fetch("http://localhost/my-app-server/update_user.php", {
+      const res = await fetch("/my-app-server/update_user.php", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -329,7 +331,7 @@ const Crud: React.FC = () => {
       if ((currentUserRole || '').toLowerCase() === 'adviser') {
         // Adviser: delete directly
         const res = await fetch(
-          `http://localhost/my-app-server/delete_user.php?user_id=${userToDelete}`,
+          `/my-app-server/delete_user.php?user_id=${userToDelete}`,
           {
             method: "DELETE",
             credentials: "include",
@@ -352,7 +354,7 @@ const Crud: React.FC = () => {
       } else {
         // President/Officer/Member: request deletion
         const reasonToSend = deleteReason.trim() || "Request to delete user.";
-        const res = await fetch("http://localhost/my-app-server/add_deletion_request.php", {
+        const res = await fetch("/my-app-server/add_deletion_request.php", {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
@@ -389,7 +391,7 @@ const Crud: React.FC = () => {
   // Cancel deletion request
   const cancelDeletionRequest = async (requestId: number) => {
     try {
-      const res = await fetch("http://localhost/my-app-server/cancel_deletion_request.php", {
+      const res = await fetch("/my-app-server/cancel_deletion_request.php", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -461,7 +463,7 @@ const Crud: React.FC = () => {
   // Fetch user's own pending deletion requests
   const fetchMyDeletionRequests = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/get_deletion_requests.php", { credentials: "include" });
+      const res = await fetch("/my-app-server/get_deletion_requests.php", { credentials: "include" });
       const data = await res.json();
       setMyDeletionRequests(Array.isArray(data) ? data : []);
     } catch (e) {
@@ -506,9 +508,17 @@ const Crud: React.FC = () => {
       return;
     }
 
+    setPendingQRUserId(userId);
+    setIsQRGenerateConfirmOpen(true);
+  };
+
+  const confirmGenerateQR = async () => {
+    if (!pendingQRUserId) return;
+
+    setIsQRGenerateConfirmOpen(false);
     setQrLoading(true);
     try {
-      const response = await fetch(`http://localhost/my-app-server/generate_qr_code.php?user_id=${userId}`, {
+      const response = await fetch(`/my-app-server/generate_qr_code.php?user_id=${pendingQRUserId}`, {
         method: 'GET',
         credentials: 'include'
       });
@@ -517,32 +527,42 @@ const Crud: React.FC = () => {
         const data = await response.json();
         setQrCodeData(data);
         setIsQRModalOpen(true);
-        toast.success('QR code loaded successfully!');
+        toast.success('QR code generated successfully! Please download it.');
       } else {
         const errorData = await response.json();
-        toast.error(errorData.error || 'Failed to load QR code');
+        toast.error(errorData.error || 'Failed to generate QR code');
       }
     } catch (error) {
-      console.error('Error loading QR code:', error);
-      toast.error('Error loading QR code');
+      console.error('Error generating QR code:', error);
+      toast.error('Error generating QR code');
     } finally {
       setQrLoading(false);
+      setPendingQRUserId(null);
     }
   };
 
   const regenerateQRCode = async () => {
     if (!qrCodeData) return;
     
+    setPendingQRUserId(qrCodeData.user.user_id);
+    setIsQRModalOpen(false);
+    setIsQRGenerateConfirmOpen(true);
+  };
+
+  const confirmRegenerateQR = async () => {
+    if (!pendingQRUserId) return;
+    
+    setIsQRGenerateConfirmOpen(false);
     setQrLoading(true);
     try {
-      const response = await fetch('http://localhost/my-app-server/generate_qr_code.php', {
+      const response = await fetch('/my-app-server/generate_qr_code.php', {
         method: 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          user_id: qrCodeData.user.user_id,
+          user_id: pendingQRUserId,
           regenerate: true
         })
       });
@@ -550,7 +570,8 @@ const Crud: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         setQrCodeData(data);
-        toast.success('QR code regenerated successfully!');
+        setIsQRModalOpen(true);
+        toast.success('QR code regenerated successfully! Please download the new QR code.');
       } else {
         const errorData = await response.json();
         toast.error(errorData.error || 'Failed to regenerate QR code');
@@ -560,15 +581,16 @@ const Crud: React.FC = () => {
       toast.error('Error regenerating QR code');
     } finally {
       setQrLoading(false);
+      setPendingQRUserId(null);
     }
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 py-14">
+    <div className="flex min-h-screen min-w-0 w-full bg-gray-50 dark:bg-gray-900 py-14">
       <Sidebar
       />
 
-<div className="flex-1 sm:ml-64 relative flex flex-col">
+<div className="flex min-w-0 flex-1 sm:ml-64 relative flex-col">
   <div className="p-3 sm:px-5 sm:pt-5 sm:pb-1">
     <Breadcrumb items={trail} />
     <div className="flex flex-col sm:flex-row sm:items-center justify-between dark:border-gray-700 pt-0 mb-0 gap-4 sm:gap-0">
@@ -590,10 +612,10 @@ const Crud: React.FC = () => {
               if (currentUserRole === 'Officer') setForm(f => ({ ...f, role: 'Member' }));
               setIsAddOpen(true);
             }}
-            className="bg-primary-600 py-1 px-2 hover:bg-primary-700 text-white dark:bg-primary-600 dark:hover:bg-primary-400 rounded-lg shadow-md transition-colors duration-200 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-opacity-50 text-xs sm:text-sm px-3 sm:px-4"
+            className="bg-primary-600 py-1 hover:bg-primary-700 text-white dark:bg-primary-600 dark:hover:bg-primary-400 rounded-lg shadow-md transition-colors duration-200 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-opacity-50 text-xs sm:text-sm px-3 sm:px-4"
           >
             <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-              <path fill-rule="evenodd" d="M9 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm-2 9a4 4 0 0 0-4 4v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1a4 4 0 0 0-4-4H7Zm8-1a1 1 0 0 1 1-1h1v-1a1 1 0 1 1 2 0v1h1a1 1 0 1 1 0 2h-1v1a1 1 0 1 1-2 0v-1h-1a1 1 0 0 1-1-1Z" clip-rule="evenodd"/>
+              <path fillRule="evenodd" d="M9 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm-2 9a4 4 0 0 0-4 4v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1a4 4 0 0 0-4-4H7Zm8-1a1 1 0 0 1 1-1h1v-1a1 1 0 1 1 2 0v1h1a1 1 0 1 1 0 2h-1v1a1 1 0 1 1-2 0v-1h-1a1 1 0 0 1-1-1Z" clipRule="evenodd"/>
             </svg>
             <span className="hidden sm:inline">Add Member</span>
             <span className="sm:hidden">Add</span>
@@ -624,9 +646,9 @@ const Crud: React.FC = () => {
   </div>
 
 
-  <div className="flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
-    <div ref={tableRef} className="overflow-x-auto shadow-md relative z-10">
-          <table className="min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow dark:text-white">
+  <div className="min-w-0 flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
+    <div ref={tableRef} className="responsive-table-frame shadow-md relative z-10">
+          <table className="responsive-table-cards min-w-0 sm:min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow dark:text-white">
           <thead className="bg-gray-100 dark:bg-gray-700">
             <tr>
               {[
@@ -671,10 +693,10 @@ const Crud: React.FC = () => {
                     key={s.user_id}
                     className="border-b dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
                   >
-                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
+                    <td data-label="School ID" className="px-4 py-3 text-gray-600 dark:text-gray-300">
                       {s.school_id}
                     </td>
-                    <td className="px-4 py-3 align-middle">
+                    <td data-label="Name" className="px-4 py-3 align-middle">
                       <div className="flex items-center">
                         <img
                          src={s.avatar || placeholderImage}
@@ -686,10 +708,10 @@ const Crud: React.FC = () => {
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
+                    <td data-label="Email" className="px-4 py-3 text-gray-600 dark:text-gray-300 break-all sm:break-normal">
                       {s.email}
                     </td>
-                    <td className="px-4 py-3">
+                    <td data-label="Role" className="px-4 py-3">
                       <span
                         className={`capitalize inline-block px-2 py-1 text-sm font-normal rounded ${
                           (s.role || "").toLowerCase() === "president"
@@ -706,16 +728,16 @@ const Crud: React.FC = () => {
                         </span>
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-800 dark:text-gray-100">
+                    <td data-label="Course" className="px-4 py-3 text-gray-800 dark:text-gray-100">
                       {s.course}
                     </td>
-                    <td className="px-4 py-3 text-gray-800 dark:text-gray-100">
+                    <td data-label="Year" className="px-4 py-3 text-gray-800 dark:text-gray-100">
                       {s.year}
                     </td>
-                    <td className="px-4 py-3 text-gray-800 dark:text-gray-100">
+                    <td data-label="Section" className="px-4 py-3 text-gray-800 dark:text-gray-100">
                       {s.section}
                     </td>
-                    <td className="px-4 py-3 space-x-2 flex items-center">
+                    <td data-label="Actions" className="px-4 py-3 space-x-2 flex items-center">
                       {canEditOrDelete && (
                         <>
                           <button
@@ -814,13 +836,13 @@ const Crud: React.FC = () => {
   <Modal.Header className="dark:bg-gray-800">
         <div className="flex items-center">
             <svg className="w-6 h-6 mr-2 ml-1 text-primary-600" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-              <path fill-rule="evenodd" d="M9 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm-2 9a4 4 0 0 0-4 4v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1a4 4 0 0 0-4-4H7Zm8-1a1 1 0 0 1 1-1h1v-1a1 1 0 1 1 2 0v1h1a1 1 0 1 1 0 2h-1v1a1 1 0 1 1-2 0v-1h-1a1 1 0 0 1-1-1Z" clip-rule="evenodd"/>
+              <path fillRule="evenodd" d="M9 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm-2 9a4 4 0 0 0-4 4v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1a4 4 0 0 0-4-4H7Zm8-1a1 1 0 0 1 1-1h1v-1a1 1 0 1 1 2 0v1h1a1 1 0 1 1 0 2h-1v1a1 1 0 1 1-2 0v-1h-1a1 1 0 0 1-1-1Z" clipRule="evenodd"/>
             </svg>
                     Add New Member
                 </div>
   </Modal.Header>
   <Modal.Body className="dark:bg-gray-800 dark:text-white rounded">
-    <form onSubmit={addStudent} className="grid gr id-cols-1 sm:grid-cols-2 gap-4">
+    <form onSubmit={addStudent} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {/* School ID */}
       <div className="sm:col-span-2">
         <label className="block mb-1 text-sm">School ID</label>
@@ -835,7 +857,7 @@ const Crud: React.FC = () => {
       </div>
 
       {/* Name Fields */}
-      <div className="sm:col-span-2 grid grid-cols-3 gap-4">
+      <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <label className="block mb-1 text-sm">First Name</label>
           <input
@@ -925,7 +947,7 @@ const Crud: React.FC = () => {
       </div>
 
       {/* Year and Section */}
-      <div className="sm:col-span-2 grid grid-cols-2 gap-4">
+      <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block mb-1 text-sm">Year</label>
           <input
@@ -1004,7 +1026,7 @@ const Crud: React.FC = () => {
       </div>
 
       {/* Name Fields */}
-      <div className="sm:col-span-2 grid grid-cols-3 gap-4">
+        <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <label className="block mb-1 text-sm">First Name</label>
           <input
@@ -1088,7 +1110,7 @@ const Crud: React.FC = () => {
       </div>
 
       {/* Year and Section */}
-      <div className="sm:col-span-2 grid grid-cols-2 gap-4">
+      <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block mb-1 text-sm">Year</label>
           <input
@@ -1149,13 +1171,37 @@ const Crud: React.FC = () => {
 
       {/* ——— DELETE MODAL ——— */}
       {(currentUserRole || '').toLowerCase() === 'adviser' ? (
-        <Modal show={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}>
-          <Modal.Header className="dark:bg-gray-800">Confirm Deletion</Modal.Header>
-          <Modal.Body className="dark:bg-gray-800 dark:text-white rounded">
-            <div className="mb-4 text-center">Are you sure you want to delete this member? This action cannot be undone.</div>
-            <div className="flex justify-end space-x-2">
-              <Button color="failure" onClick={deleteStudent} className="px-8 bg-red-600 hover:bg-red-700 text-white">Delete</Button>
-              <Button color="gray" onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }} className="border border-gray-300 dark:border-gray-600">Cancel</Button>
+        <Modal show={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }} size="lg">
+          <Modal.Body className="p-4 text-center bg-white dark:bg-gray-800 rounded-lg shadow sm:p-5">
+            <button
+              onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}
+              className="absolute top-2.5 right-2.5 text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              <span className="sr-only">Close modal</span>
+            </button>
+
+            <svg className="text-gray-400 dark:text-gray-500 w-11 h-11 mb-3.5 mx-auto" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"/>
+            </svg>
+            
+            <p className="mb-4 text-gray-500 dark:text-gray-300">Are you sure you want to delete this member?</p>
+            
+            <div className="flex justify-center items-center space-x-4">
+              <button
+                onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}
+                className="py-2 px-3 text-sm font-medium text-gray-500 bg-white rounded-lg border border-gray-200 hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-primary-300 hover:text-gray-900 focus:z-10 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-500 dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-600"
+              >
+                No, cancel
+              </button>
+              <button
+                onClick={deleteStudent}
+                className="py-2 px-3 text-sm font-medium text-center text-white bg-red-600 rounded-lg hover:bg-red-800 focus:ring-4 focus:outline-none focus:ring-red-300 dark:bg-red-500 dark:hover:bg-red-600 dark:focus:ring-red-900"
+              >
+                Yes, I'm sure
+              </button>
             </div>
           </Modal.Body>
         </Modal>
@@ -1257,6 +1303,91 @@ const Crud: React.FC = () => {
               >
                 Yes, cancel request
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QR Code Generation Confirmation Modal */}
+      {isQRGenerateConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center mb-4">
+              <svg className="w-6 h-6 text-orange-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
+              </svg>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                {qrCodeData ? 'Regenerate QR Code?' : 'Generate QR Code?'}
+              </h3>
+            </div>
+            
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              {qrCodeData ? 
+                'This will generate a new QR code and invalidate the current one. ' :
+                'This will generate a new QR code for this user. '
+              }
+              <strong className="text-orange-600 dark:text-orange-400">The user will need to download the new QR code to keep it updated.</strong>
+            </p>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setIsQRGenerateConfirmOpen(false);
+                  setPendingQRUserId(null);
+                  if (qrCodeData) setIsQRModalOpen(true); // Reopen QR modal if regenerating
+                }}
+                className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={qrCodeData ? confirmRegenerateQR : confirmGenerateQR}
+                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors duration-200"
+              >
+                {qrCodeData ? 'Yes, Regenerate' : 'Yes, Generate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QR Code Display Modal */}
+      {isQRModalOpen && qrCodeData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                QR Code for {qrCodeData.user.user_fname} {qrCodeData.user.user_lname}
+              </h3>
+              <button
+                onClick={() => setIsQRModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="flex flex-col items-center space-y-4">
+              <QRCodeDisplay
+                qrCodeData={qrCodeData.qr_code_data}
+                size={256}
+                downloadFileName={qrCodeData.user.user_fname + '-' + qrCodeData.user.user_lname}
+              />
+              
+              <div className="flex space-x-3">
+                <button
+                  onClick={regenerateQRCode}
+                  className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors duration-200"
+                >
+                  Regenerate
+                </button>
+              </div>
+              
+              <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                Generated: {new Date(qrCodeData.generated_at).toLocaleString()}
+              </p>
             </div>
           </div>
         </div>

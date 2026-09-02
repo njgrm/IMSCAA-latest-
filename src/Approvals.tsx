@@ -250,7 +250,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
     e.preventDefault();
     if (!editTxnId) return;
     try {
-      const res = await fetch("http://localhost/my-app-server/update_transaction.php", {
+      const res = await fetch("/my-app-server/update_transaction.php", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -289,7 +289,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 
   const fetchTransactions = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/get_transaction.php", {
+      const res = await fetch("/my-app-server/get_transaction.php", {
         credentials: "include",
       });
       const dataRaw = await res.json();
@@ -314,7 +314,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/get_user.php", {
+      const res = await fetch("/my-app-server/get_user.php", {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to load users");
@@ -327,7 +327,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
   
   const fetchFeeRequirements = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/get_fee_requirement.php", {
+      const res = await fetch("/my-app-server/get_fee_requirement.php", {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to load fees");
@@ -349,7 +349,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 
   const fetchCurrentUser = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/get_current_user.php", {
+      const res = await fetch("/my-app-server/get_current_user.php", {
         credentials: "include",
       });
       const data = await res.json();
@@ -380,10 +380,10 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
   const openAddModal = async () => {
     try {
       const [usersRes, feesRes] = await Promise.all([
-        fetch("http://localhost/my-app-server/get_user.php", {
+        fetch("/my-app-server/get_user.php", {
           credentials: "include",
         }),
-        fetch("http://localhost/my-app-server/get_fee_requirement.php", {
+        fetch("/my-app-server/get_fee_requirement.php", {
           credentials: "include",
         })
       ]);
@@ -452,7 +452,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
     }
 
     try {
-      const res = await fetch("http://localhost/my-app-server/add_transaction.php", {
+      const res = await fetch("/my-app-server/add_transaction.php", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -482,26 +482,26 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
   };
 
   function deleteTransaction(txnId: number): Promise<void> {
-    return fetch("http://localhost/my-app-server/get_current_user.php", { credentials: "include" })
+    return fetch("/my-app-server/get_current_user.php", { credentials: "include" })
       .then(res => res.json())
       .then(user => {
         const role = user.role ? user.role.toLowerCase() : null;
         if (role === 'adviser') {
           // Adviser: delete directly
-          return fetch(
-            `http://localhost/my-app-server/delete_transaction.php?transaction_id=${txnId}`,
-            {
-              method: "DELETE",
-              credentials: "include",
-            }
+    return fetch(
+      `/my-app-server/delete_transaction.php?transaction_id=${txnId}`,
+      {
+        method: "DELETE",
+        credentials: "include",
+      }
           ).then(async res => {
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Delete failed");
-            return;
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Delete failed");
+        return;
           });
         } else {
           // President/Officer: request deletion
-          return fetch("http://localhost/my-app-server/add_deletion_request.php", {
+          return fetch("/my-app-server/add_deletion_request.php", {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
@@ -576,7 +576,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
     e.preventDefault();
     if (!updateTxnId) return;
     try {
-      const res = await fetch("http://localhost/my-app-server/update_transactions.php", {
+      const res = await fetch("/my-app-server/update_transactions.php", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -645,22 +645,70 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
   const [deletionRequests, setDeletionRequests] = useState<any[]>([]);
   const [selectedRequests, setSelectedRequests] = useState<number[]>([]);
 
+  // Add state for event registrations
+  const [eventRegistrations, setEventRegistrations] = useState<any[]>([]);
+
+  // Add state for attendance records to display proper user names
+  const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
+
   // 2. Fetch grouped deletion requests on mount
   useEffect(() => {
-    fetch('http://localhost/my-app-server/get_deletion_requests.php', { credentials: 'include' })
+    fetch('/my-app-server/get_deletion_requests.php', { credentials: 'include' })
       .then(res => res.json())
       .then(data => setDeletionRequests(Array.isArray(data) ? data : []));
+    
+    // Fetch attendance records for proper user names
+    fetchAttendanceRecords();
   }, []);
 
-  // 3. Group requests by (type, target_id)
+  // Function to fetch event registrations
+  const fetchEventRegistrations = async (requirementId: number) => {
+    try {
+      const response = await fetch(`/my-app-server/get_event_registrations.php?requirement_id=${requirementId}`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error('Failed to fetch registrations');
+      const data = await response.json();
+      setEventRegistrations(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching event registrations:', error);
+      setEventRegistrations([]);
+    }
+  };
+
+  // Function to fetch attendance records
+  const fetchAttendanceRecords = async () => {
+    try {
+      const response = await fetch('/my-app-server/get_attendance_records.php', {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error('Failed to fetch attendance records');
+      const data = await response.json();
+      setAttendanceRecords(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching attendance records:', error);
+      setAttendanceRecords([]);
+    }
+  };
+
+  // 3. Group requests by (type, target_id, status) - only group pending requests together
   const groupedRequests = useMemo(() => {
     const map = new Map();
     for (const req of deletionRequests) {
-      const key = req.type + ':' + req.target_id;
+      // Only group pending requests; approved/denied should be separate
+      const key = req.status === 'pending' 
+        ? `${req.type}:${req.target_id}:${req.approval_type}:pending`
+        : `${req.type}:${req.target_id}:${req.approval_type}:${req.request_id}`;
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(req);
     }
-    return Array.from(map.values());
+    const result = Array.from(map.values());
+    
+    // Debug logging
+    console.log('Deletion requests:', deletionRequests);
+    console.log('Grouped requests:', result);
+    
+    return result;
   }, [deletionRequests]);
 
   // 4. Table columns: Type, Title/Name, Requesters, Reason (summary), Status, Requested At, Actions
@@ -674,7 +722,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 
   const handleMassApprove = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/approve_deletion_request.php", {
+      const res = await fetch("/my-app-server/approve_deletion_request.php", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -683,7 +731,21 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         })
       });
       if (!res.ok) throw new Error("Failed to approve requests");
-      toast.success("Requests approved");
+      
+      // Check if any of the selected requests are edit requests
+      const allRequests = groupedRequests.flat();
+      const selectedRequestObjects = allRequests.filter(r => selectedRequests.includes(r.request_id));
+      const hasEditRequests = selectedRequestObjects.some(r => r.approval_type === 'attendance_edit');
+      const hasDeleteRequests = selectedRequestObjects.some(r => r.approval_type === 'delete');
+      
+      if (hasEditRequests && hasDeleteRequests) {
+        toast.success("Requests approved");
+      } else if (hasEditRequests) {
+        toast.success("Edit requests approved");
+      } else {
+        toast.success("Deletion requests approved");
+      }
+      
       setSelectedRequests([]);
       await fetchDeletionRequests();
     } catch (err: any) {
@@ -693,7 +755,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 
   const handleMassDeny = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/deny_deletion_request.php", {
+      const res = await fetch("/my-app-server/deny_deletion_request.php", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -702,7 +764,21 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         })
       });
       if (!res.ok) throw new Error("Failed to deny requests");
-      toast.success("Requests denied");
+      
+      // Check if any of the selected requests are edit requests
+      const allRequests = groupedRequests.flat();
+      const selectedRequestObjects = allRequests.filter(r => selectedRequests.includes(r.request_id));
+      const hasEditRequests = selectedRequestObjects.some(r => r.approval_type === 'attendance_edit');
+      const hasDeleteRequests = selectedRequestObjects.some(r => r.approval_type === 'delete');
+      
+      if (hasEditRequests && hasDeleteRequests) {
+        toast.success("Requests denied");
+      } else if (hasEditRequests) {
+        toast.success("Edit requests denied");
+      } else {
+        toast.success("Deletion requests denied");
+      }
+      
       setSelectedRequests([]);
       await fetchDeletionRequests();
     } catch (err: any) {
@@ -712,7 +788,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 
   const handleApprove = async (reqs: any[]) => {
     try {
-      const res = await fetch("http://localhost/my-app-server/approve_deletion_request.php", {
+      const res = await fetch("/my-app-server/approve_deletion_request.php", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -721,7 +797,19 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         })
       });
       if (!res.ok) throw new Error("Failed to approve requests");
-      toast.success("Requests approved");
+      
+      // Check if any of the requests are edit requests
+      const hasEditRequests = reqs.some(r => r.approval_type === 'attendance_edit');
+      const hasDeleteRequests = reqs.some(r => r.approval_type === 'delete');
+      
+      if (hasEditRequests && hasDeleteRequests) {
+        toast.success("Requests approved");
+      } else if (hasEditRequests) {
+        toast.success("Edit requests approved");
+      } else {
+        toast.success("Deletion requests approved");
+      }
+      
       setSelectedRequests(prev => prev.filter(r => !reqs.includes(r)));
       await fetchDeletionRequests();
       setIsPreviewOpen(false); // close drawer if open
@@ -732,7 +820,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 
   const handleDeny = async (reqs: any[]) => {
     try {
-      const res = await fetch("http://localhost/my-app-server/deny_deletion_request.php", {
+      const res = await fetch("/my-app-server/deny_deletion_request.php", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -741,7 +829,19 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         })
       });
       if (!res.ok) throw new Error("Failed to deny requests");
-      toast.success("Requests denied");
+      
+      // Check if any of the requests are edit requests
+      const hasEditRequests = reqs.some(r => r.approval_type === 'attendance_edit');
+      const hasDeleteRequests = reqs.some(r => r.approval_type === 'delete');
+      
+      if (hasEditRequests && hasDeleteRequests) {
+        toast.success("Requests denied");
+      } else if (hasEditRequests) {
+        toast.success("Edit requests denied");
+      } else {
+        toast.success("Deletion requests denied");
+      }
+      
       setSelectedRequests(prev => prev.filter(r => !reqs.includes(r)));
       await fetchDeletionRequests();
       setIsPreviewOpen(false); // close drawer if open
@@ -752,11 +852,18 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 
   const fetchDeletionRequests = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/get_deletion_requests.php", {
+      const res = await fetch("/my-app-server/get_deletion_requests.php", {
         credentials: "include"
       });
       const data = await res.json();
+      
+      // Debug logging
+      console.log('Fetched deletion requests:', data);
+      
       setDeletionRequests(Array.isArray(data) ? data : []);
+      
+      // Also refresh attendance records to ensure we have latest data
+      await fetchAttendanceRecords();
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -768,6 +875,19 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
   function openPreviewDrawer(reqs: any[]) {
     setPreviewReqs(reqs);
     setIsPreviewOpen(true);
+    
+    // If it's a requirement type, fetch event registrations
+    const first = reqs[0];
+    if (first.type === 'requirement') {
+      const r = feeRequirements.find(r => r.requirement_id === first.target_id);
+      if (r && (r.requirement_type === 'event' || r.requirement_type === 'activity')) {
+        fetchEventRegistrations(first.target_id);
+      } else {
+        setEventRegistrations([]);
+      }
+    } else {
+      setEventRegistrations([]);
+    }
   }
 
   // Add state for confirmation modals
@@ -781,9 +901,9 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
   }, []);
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 py-14">
+    <div className="flex min-h-screen min-w-0 w-full bg-gray-50 dark:bg-gray-900 py-14">
       <Sidebar />
-      <div className="flex-1 sm:ml-64 relative flex flex-col">
+      <div className="flex min-w-0 flex-1 sm:ml-64 relative flex-col">
         <div className="p-3 sm:px-5 sm:pt-5 sm:pb-2">
           <Breadcrumb items={trail} />
           <div className="flex flex-col sm:flex-row sm:items-center justify-between dark:border-gray-700 pt-0 mb-0 gap-4 sm:gap-0">
@@ -809,7 +929,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
               }`}
             >
                <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3 -ml-0 text-white" fill="currentColor" viewBox="0 3 20 20">
-               <path fill-rule="evenodd" d="M15.03 9.684h3.965c.322 0 .64.08.925.232.286.153.532.374.717.645a2.109 2.109 0 0 1 .242 1.883l-2.36 7.201c-.288.814-.48 1.355-1.884 1.355-2.072 0-4.276-.677-6.157-1.256-.472-.145-.924-.284-1.348-.404h-.115V9.478a25.485 25.485 0 0 0 4.238-5.514 1.8 1.8 0 0 1 .901-.83 1.74 1.74 0 0 1 1.21-.048c.396.13.736.397.96.757.225.36.32.788.269 1.211l-1.562 4.63ZM4.177 10H7v8a2 2 0 1 1-4 0v-6.823C3 10.527 3.527 10 4.176 10Z" clip-rule="evenodd"/>
+               <path fillRule="evenodd" d="M15.03 9.684h3.965c.322 0 .64.08.925.232.286.153.532.374.717.645a2.109 2.109 0 0 1 .242 1.883l-2.36 7.201c-.288.814-.48 1.355-1.884 1.355-2.072 0-4.276-.677-6.157-1.256-.472-.145-.924-.284-1.348-.404h-.115V9.478a25.485 25.485 0 0 0 4.238-5.514 1.8 1.8 0 0 1 .901-.83 1.74 1.74 0 0 1 1.21-.048c.396.13.736.397.96.757.225.36.32.788.269 1.211l-1.562 4.63ZM4.177 10H7v8a2 2 0 1 1-4 0v-6.823C3 10.527 3.527 10 4.176 10Z" clipRule="evenodd"/>
                         </svg>
               <span className="hidden sm:inline">Mass </span>Approve
             </button>
@@ -824,11 +944,11 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
               }`}
             >
                     <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3 -ml-0 text-white" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M8.97 14.316H5.004c-.322 0-.64-.08-.925-.232a2.022 2.022 0 0 1-.717-.645 2.108 2.108 0 0 1-.242-1.883l2.36-7.201C5.769 3.54 5.96 3 7.365 3c2.072 0 4.276.678 6.156 1.256.473.145.925.284 1.35.404h.114v9.862a25.485 25.485 0 0 0-4.238 5.514c-.197.376-.516.67-.901.83a1.74 1.74 0 0 1-1.21.048 1.79 1.79 0 0 1-.96-.757 1.867 1.867 0 0 1-.269-1.211l1.562-4.63ZM19.822 14H17V6a2 2 0 1 1 4 0v6.823c0 .65-.527 1.177-1.177 1.177Z" clip-rule="evenodd"/>
-            </svg>
+              <path fillRule="evenodd" d="M8.97 14.316H5.004c-.322 0-.64-.08-.925-.232a2.022 2.022 0 0 1-.717-.645 2.108 2.108 0 0 1-.242-1.883l2.36-7.201C5.769 3.54 5.96 3 7.365 3c2.072 0 4.276.678 6.156 1.256.473.145.925.284 1.35.404h.114v9.862a25.485 25.485 0 0 0-4.238 5.514c-.197.376-.516.67-.901.83a1.74 1.74 0 0 1-1.21.048 1.79 1.79 0 0 1-.96-.757 1.867 1.867 0 0 1-.269-1.211l1.562-4.63ZM19.822 14H17V6a2 2 0 1 1 4 0v6.823c0 .65-.527 1.177-1.177 1.177Z" clipRule="evenodd"/>
+                        </svg>
 
               <span className="hidden sm:inline">Mass </span>Deny
-            </button>
+                    </button>
           </div>
 
               <FilterDropdownTxn
@@ -845,10 +965,10 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
+        <div className="min-w-0 flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
       
-          <div ref={tableRef} className="overflow-x-auto shadow-md relative z-10">
-            <table className="min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow dark:text-white text-sm sm:text-sm">
+          <div ref={tableRef} className="responsive-table-frame shadow-md relative z-10">
+            <table className="responsive-table-cards min-w-0 sm:min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow dark:text-white text-sm sm:text-sm">
               <thead className="bg-gray-100 dark:bg-gray-700">
                 <tr>
                   <th className="px-2 sm:px-2 py-2 pl-0">
@@ -860,6 +980,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                     />
                   </th>
                   <th className="px-2 sm:px-4 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">Type</th>
+                  <th className="px-2 sm:px-4 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">Action</th>
                   <th className="px-2 sm:px-4 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">Title/Name</th>
                   <th className="px-2 sm:px-4 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">Requested By</th>
                   <th className="px-2 sm:px-4 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">Status</th>
@@ -871,7 +992,11 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                 {groupedRequests.map((reqs, idx) => {
                   const first = reqs[0];
                   const isSelected = selectedRequests.includes(first.request_id);
-                  let title = '', typeLabel = '', userName = '';
+                  let title = '', typeLabel = '', userName = '', actionLabel = '';
+                  
+                  // Set action label
+                  actionLabel = first.approval_type === 'attendance_edit' ? 'Edit' : 'Delete';
+                  
                   if (first.type === 'user') {
                     const u = users.find(u => u.user_id === first.target_id);
                     title = u ? `${u.user_fname} ${u.user_lname}` : `User #${first.target_id}`;
@@ -888,10 +1013,20 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                     const reqTitle = r ? r.title : `Txn #${t?.transaction_id ?? first.target_id}`;
                     title = `${reqTitle} for ${userName}`;
                     typeLabel = 'Transaction';
+                  } else if (first.type === 'attendance') {
+                    // For attendance records, get the user info from fetched attendance records
+                    const attendanceRecord = attendanceRecords.find(ar => ar.attendance_id === first.target_id);
+                    if (attendanceRecord) {
+                      title = `Attendance of ${attendanceRecord.user_fname} ${attendanceRecord.user_lname}`;
+                    } else {
+                      title = `Attendance Record #${first.target_id}`;
+                    }
+                    typeLabel = 'Attendance';
                   } else {
                     title = `#${first.target_id}`;
                     typeLabel = first.type;
                   }
+                  
                   const requesters = reqs.length > 1 ? 'Multiple users' : (() => {
                     const u = users.find(u => u.user_id === reqs[0].requested_by);
                     return u ? `${u.user_fname} ${u.user_lname}` : `User #${reqs[0].requested_by}`;
@@ -904,7 +1039,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                     status === 'denied' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800';
                   return (
                     <tr key={first.request_id} className="border-b dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
-                      <td className="px-2 sm:px-4 py-2">
+                      <td data-label="Select" className="px-2 sm:px-4 py-2">
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -912,24 +1047,32 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                           className="w-3 h-3 sm:w-4 sm:h-4 bg-gray-100 border-gray-300 rounded text-primary-600 focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-700 focus:ring-2 dark:bg-gray-600 dark:border-gray-500"
                         />
                       </td>
-                      <td className="px-2 sm:px-4 py-2">{typeLabel}</td>
-                      <td className="px-2 sm:px-4 py-2">
+                      <td data-label="Type" className="px-2 sm:px-4 py-2">{typeLabel}</td>
+                      <td data-label="Action" className="px-2 sm:px-4 py-2">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          actionLabel === 'Edit' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : 
+                          'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+                        }`}>
+                          {actionLabel}
+                        </span>
+                      </td>
+                      <td data-label="Title/Name" className="px-2 sm:px-4 py-2">
                         <div className="max-w-[150px] sm:max-w-none truncate" title={title}>
                           {title}
                         </div>
                       </td>
-                      <td className="px-2 sm:px-4 py-2">
+                      <td data-label="Requested By" className="px-2 sm:px-4 py-2">
                         <div className="max-w-[120px] sm:max-w-none truncate" title={requesters}>
                           {requesters}
                         </div>
                       </td>
-                      <td className="px-2 sm:px-4 py-2">
+                      <td data-label="Status" className="px-2 sm:px-4 py-2">
                         <span className={`capitalize px-2 py-1 rounded ${statusColor} text-xs font-semibold`}>
                           {status}
                         </span>
                       </td>
-                      <td className="px-2 sm:px-4 py-2 text-xs sm:text-sm">{requestedAt}</td>
-                      <td className="px-2 sm:px-4 py-2 space-x-1 sm:space-x-2 flex items-center">
+                      <td data-label="Requested At" className="px-2 sm:px-4 py-2 text-xs sm:text-sm">{requestedAt}</td>
+                      <td data-label="Actions" className="px-2 sm:px-4 py-2 space-x-1 sm:space-x-2 flex items-center">
                        
                         {/* Preview Button - always shown */}
                         <button
@@ -939,32 +1082,32 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 -ml-0.5">
                             <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
                             <path fillRule="evenodd" clipRule="evenodd" d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113-1.487 4.471-5.705 7.697-10.677 7.697-4.97 0-9.186-3.223-10.675-7.69a1.762 1.762 0 010-1.113zM17.25 12a5.25 5.25 0 11-10.5 0 5.25 5.25 0 0110.5 0z" />
-                            </svg>
+                                </svg>
                           <span className="hidden sm:inline">Preview</span>
                         </button>
                          {/* Approve Button - only if pending */}
                          {status === 'pending' && (
-                          <button
+                        <button
                             onClick={() => setConfirmAction({action: 'approve', reqs})}
                             className="flex items-center justify-center px-2 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm font-medium bg-primary-600 text-white rounded-lg hover:bg-primary-400 transition-transform duration-200 ease-in-out transform hover:scale-105"
-                          >
+                        >
                             <svg className="w-3 h-3 sm:w-5 sm:h-4 mr-1 sm:mr-1.5 -ml-1 text-white" fill="currentColor" viewBox="0 3 20 20">
                               <path fillRule="evenodd" d="M15.03 9.684h3.965c.322 0 .64.08.925.232.286.153.532.374.717.645a2.109 2.109 0 0 1 .242 1.883l-2.36 7.201c-.288.814-.48 1.355-1.884 1.355-2.072 0-4.276-.677-6.157-1.256-.472-.145-.924-.284-1.348-.404h-.115V9.478a25.485 25.485 0 0 0 4.238-5.514 1.8 1.8 0 0 1 .901-.83 1.74 1.74 0 0 1 1.21-.048c.396.13.736.397.96.757.225.36.32.788.269 1.211l-1.562 4.63ZM4.177 10H7v8a2 2 0 1 1-4 0v-6.823C3 10.527 3.527 10 4.176 10Z" clipRule="evenodd"/>
-                            </svg>
+                                </svg>
                             <span className="hidden sm:inline">Approve</span>
-                          </button>
+                        </button>
                         )}
                         {/* Deny Button - only if pending */}
                         {status === 'pending' && (
-                          <button
+                        <button
                             onClick={() => setConfirmAction({action: 'deny', reqs})}
                             className="flex items-center justify-center px-2 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-400 transition-transform duration-200 ease-in-out transform hover:scale-105"
-                          >
+                        >
                             <svg className="w-3 h-3 sm:w-5 sm:h-4 mr-1 sm:mr-1.5 -ml-1 text-white" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M8.97 14.316H5.004c-.322 0-.64-.08-.925-.232a2.022 2.022 0 0 1-.717-.645 2.108 2.108 0 0 1-.242-1.883l2.36-7.201C5.769 3.54 5.96 3 7.365 3c2.072 0 4.276.678 6.156 1.256.473.145.925.284 1.35.404h.114v9.862a25.485 25.485 0 0 0-4.238 5.514c-.197.376-.516.67-.901.83a1.74 1.74 0 0 1-1.21.048 1.79 1.79 0 0 1-.96-.757 1.867 1.867 0 0 1-.269-1.211l1.562-4.63ZM19.822 14H17V6a2 2 0 1 1 4 0v6.823c0 .65-.527 1.177-1.177 1.177Z" clipRule="evenodd"/>
                             </svg>
                             <span className="hidden sm:inline">Deny</span>
-                          </button>
+                        </button>
                         )}
                       </td>
                     </tr>
@@ -1698,7 +1841,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                     <Button
                         onClick={async () => {
                             try {
-                            const res = await fetch("http://localhost/my-app-server/update_transaction.php", {
+                            const res = await fetch("/my-app-server/update_transaction.php", {
                                 method: "POST",
                                 credentials: "include",
                                 headers: { "Content-Type": "application/json" },
@@ -1980,7 +2123,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
             <Button
                 onClick={async () => {
                     try {
-                    const res = await fetch("http://localhost/my-app-server/update_transactions.php", {
+                    const res = await fetch("/my-app-server/update_transactions.php", {
                         method: "POST",
                         credentials: "include",
                         headers: { "Content-Type": "application/json" },
@@ -2026,35 +2169,35 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 {/* ── PREVIEW DELETION REQUEST DRAWER ───────────────────────────────────────── */}
 {isPreviewOpen && previewReqs && (
   <div className={`fixed inset-0 z-50 pointer-events-auto`}>
-    {/* overlay */}
-    <div
+  {/* overlay */}
+  <div
       className="absolute inset-0 bg-black/30 dark:bg-gray-900/60 transition-opacity duration-300 opacity-100"
-      onClick={() => setIsPreviewOpen(false)}
-    />
-    {/* drawer content */}
-    <div
+    onClick={() => setIsPreviewOpen(false)}
+  />
+  {/* drawer content */}
+  <div
       className="relative z-50 h-full p-4 overflow-y-auto transition-transform duration-300 ease-in-out translate-x-0 w-full max-w-2xl bg-white dark:bg-gray-800"
-      onClick={e => e.stopPropagation()}
-    >
-      {/* header + close */}
-      <div className="flex justify-between items-center mb-4">
-        <h4 className="text-xl font-semibold text-gray-900 dark:text-white">
+    onClick={e => e.stopPropagation()}
+  >
+          {/* header + close */}
+          <div className="flex justify-between items-center mb-4">
+            <h4 className="text-xl font-semibold text-gray-900 dark:text-white">
           Deletion Request Details
-        </h4>
-        <button
-          onClick={() => setIsPreviewOpen(false)}
-          className="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white"
-        >
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path
-              fillRule="evenodd"
+            </h4>
+            <button
+              onClick={() => setIsPreviewOpen(false)}
+              className="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fillRule="evenodd"
               d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 011.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-              clipRule="evenodd"
-            />
-          </svg>
-          <span className="sr-only">Close drawer</span>
-        </button>
-      </div>
+                  clipRule="evenodd"
+                />
+              </svg>
+              <span className="sr-only">Close drawer</span>
+            </button>
+          </div>
       {/* Item info */}
       {(() => {
         const first = previewReqs[0];
@@ -2065,24 +2208,18 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
           typeLabel = 'Member';
           image = u?.avatar || placeholderImage;
           imageBlock = (
-            <div className="flex items-center gap-4 mb-2">
+            <div className="flex items-center gap-4 mb-4">
               <img src={image} alt={title} className="w-16 h-16 rounded-full object-cover border border-gray-200 dark:border-gray-600" />
               <div className="text-lg font-semibold text-gray-900 dark:text-white">{title}</div>
             </div>
           );
           detailsBlock = u && (
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 mb-4">
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 border border-gray-200 dark:border-gray-600 mb-4">
               <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                 <div className="text-gray-500 dark:text-gray-400 uppercase">School ID</div>
                 <div className="font-medium text-gray-900 dark:text-white">{u.school_id}</div>
-                <div className="text-gray-500 dark:text-gray-400 uppercase">Email</div>
-                <div className="font-medium text-gray-900 dark:text-white">{u.email}</div>
                 <div className="text-gray-500 dark:text-gray-400 uppercase">Course</div>
-                <div className="font-medium text-gray-900 dark:text-white">{u.course}</div>
-                <div className="text-gray-500 dark:text-gray-400 uppercase">Year</div>
-                <div className="font-medium text-gray-900 dark:text-white">{u.year}</div>
-                <div className="text-gray-500 dark:text-gray-400 uppercase">Section</div>
-                <div className="font-medium text-gray-900 dark:text-white">{u.section}</div>
+                <div className="font-medium text-gray-900 dark:text-white">{u.course} {u.year}-{u.section}</div>
                 <div className="text-gray-500 dark:text-gray-400 uppercase">Role</div>
                 <div className="font-medium text-gray-900 dark:text-white">{u.role}</div>
               </div>
@@ -2094,29 +2231,21 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
           typeLabel = 'Requirement';
           image = r?.req_picture || ReqplaceholderImage;
           imageBlock = (
-            <div className="w-full mb-2">
-              <img src={image} alt={title} className="w-full h-36 object-cover rounded-lg border border-gray-200 dark:border-gray-600" />
+            <div className="w-full mb-4">
+              <img src={image} alt={title} className="w-full h-32 object-cover rounded-lg border border-gray-200 dark:border-gray-600" />
             </div>
           );
           detailsBlock = r && (
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 mb-4">
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 border border-gray-200 dark:border-gray-600 mb-4">
               <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                <div className="text-gray-500 dark:text-gray-400 uppercase">Title</div>
-                <div className="font-medium text-gray-900 dark:text-white">{r.title}</div>
-                <div className="text-gray-500 dark:text-gray-400 uppercase">Amount Due</div>
-                <div className="font-medium text-gray-900 dark:text-white">₱{r.amount_due?.toFixed(2)}</div>
                 <div className="text-gray-500 dark:text-gray-400 uppercase">Type</div>
                 <div className="font-medium text-gray-900 dark:text-white">{r.requirement_type}</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Amount</div>
+                <div className="font-medium text-gray-900 dark:text-white">₱{r.amount_due?.toFixed(2)}</div>
                 <div className="text-gray-500 dark:text-gray-400 uppercase">Status</div>
                 <div className="font-medium text-gray-900 dark:text-white">{r.status}</div>
-                <div className="text-gray-500 dark:text-gray-400 uppercase">Location</div>
-                <div className="font-medium text-gray-900 dark:text-white">{r.location}</div>
-                <div className="text-gray-500 dark:text-gray-400 uppercase">Start</div>
-                <div className="font-medium text-gray-900 dark:text-white">{r.start_datetime ? new Date(r.start_datetime).toLocaleString() : '-'}</div>
-                <div className="text-gray-500 dark:text-gray-400 uppercase">End</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">End Date</div>
                 <div className="font-medium text-gray-900 dark:text-white">{r.end_datetime ? new Date(r.end_datetime).toLocaleString() : '-'}</div>
-                <div className="text-gray-500 dark:text-gray-400 uppercase">Date Added</div>
-                <div className="font-medium text-gray-900 dark:text-white">{r.date_added ? new Date(r.date_added).toLocaleString() : '-'}</div>
               </div>
             </div>
           );
@@ -2130,34 +2259,70 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
           typeLabel = 'Transaction';
           image = r?.req_picture || ReqplaceholderImage;
           imageBlock = (
-            <div className="w-full mb-2">
-              <img src={image} alt={reqTitle} className="w-full h-36 object-cover rounded-lg border border-gray-200 dark:border-gray-600" />
+            <div className="w-full mb-4">
+              <img src={image} alt={reqTitle} className="w-full h-32 object-cover rounded-lg border border-gray-200 dark:border-gray-600" />
             </div>
           );
           detailsBlock = t && (
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 mb-4">
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 border border-gray-200 dark:border-gray-600 mb-4">
               <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                <div className="text-gray-500 dark:text-gray-400 uppercase">Fee</div>
-                <div className="font-medium text-gray-900 dark:text-white">{reqTitle}</div>
                 <div className="text-gray-500 dark:text-gray-400 uppercase">Student</div>
                 <div className="font-medium text-gray-900 dark:text-white">{userName}</div>
                 <div className="text-gray-500 dark:text-gray-400 uppercase">Amount Due</div>
                 <div className="font-medium text-gray-900 dark:text-white">₱{t.amount_due?.toFixed(2)}</div>
                 <div className="text-gray-500 dark:text-gray-400 uppercase">Amount Paid</div>
                 <div className="font-medium text-gray-900 dark:text-white">₱{t.amount_paid?.toFixed(2)}</div>
-                <div className="text-gray-500 dark:text-gray-400 uppercase">Payment Status</div>
+                <div className="text-gray-500 dark:text-gray-400 uppercase">Status</div>
                 <div className={`font-medium capitalize ${t.payment_status === 'paid' ? 'text-green-500' : t.payment_status === 'partial' ? 'text-yellow-500' : 'text-red-500'}`}>{t.payment_status}</div>
-                <div className="text-gray-500 dark:text-gray-400 uppercase">Payment Method</div>
-                <div className="font-medium text-gray-900 dark:text-white">{t.payment_method || '—'}</div>
-                <div className="text-gray-500 dark:text-gray-400 uppercase">Due Date</div>
-                <div className="font-medium text-gray-900 dark:text-white">{t.due_date ? new Date(t.due_date).toLocaleDateString() : '-'}</div>
-                <div className="text-gray-500 dark:text-gray-400 uppercase">Date Added</div>
-                <div className="font-medium text-gray-900 dark:text-white">{t.date_added ? new Date(t.date_added).toLocaleDateString() : '-'}</div>
-                <div className="text-gray-500 dark:text-gray-400 uppercase">Fee Description</div>
-                <div className="font-medium text-gray-900 dark:text-white">{t.fee_description || '—'}</div>
-                <div className="text-gray-500 dark:text-gray-400 uppercase">Verified By</div>
-                <div className="font-medium text-gray-900 dark:text-white">{t.verified_by ? (userMap[t.verified_by] ? `${userMap[t.verified_by].user_fname} ${userMap[t.verified_by].user_lname}` : `ID: ${t.verified_by}`) : 'Not verified'}</div>
               </div>
+            </div>
+          );
+        } else if (first.type === 'attendance') {
+          // Handle attendance requests
+          const attendanceRecord = attendanceRecords.find(ar => ar.attendance_id === first.target_id);
+          if (attendanceRecord) {
+            title = `Attendance of ${attendanceRecord.user_fname} ${attendanceRecord.user_lname}`;
+            image = attendanceRecord.avatar || placeholderImage;
+          } else {
+            title = `Attendance Record #${first.target_id}`;
+            image = placeholderImage;
+          }
+          typeLabel = 'Attendance';
+          
+          imageBlock = (
+            <div className="flex items-center gap-4 mb-4">
+              <img src={image} alt={title} className="w-16 h-16 rounded-full object-cover border border-gray-200 dark:border-gray-600" />
+              <div className="text-lg font-semibold text-gray-900 dark:text-white">{title}</div>
+            </div>
+          );
+          
+          detailsBlock = attendanceRecord && (
+            <div className="space-y-3 mb-4">
+              {/* Current Record Info */}
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
+                <h6 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Current Record</h6>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                  <div className="text-gray-500 dark:text-gray-400 uppercase">Event</div>
+                  <div className="font-medium text-gray-900 dark:text-white">{attendanceRecord.event_title}</div>
+                  <div className="text-gray-500 dark:text-gray-400 uppercase">Status</div>
+                  <div className="font-medium text-gray-900 dark:text-white capitalize">{attendanceRecord.attendance_status}</div>
+                  <div className="text-gray-500 dark:text-gray-400 uppercase">Scan Time</div>
+                  <div className="font-medium text-gray-900 dark:text-white">{new Date(attendanceRecord.scan_datetime).toLocaleString()}</div>
+                </div>
+              </div>
+              
+              {/* Requested Changes (for edit requests) */}
+              {first.approval_type === 'attendance_edit' && first.original_status && first.requested_status && (
+                <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-3 border border-blue-200 dark:border-blue-700">
+                  <h6 className="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">Requested Changes</h6>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                    <div className="text-blue-700 dark:text-blue-300 uppercase">From Status</div>
+                    <div className="font-medium text-blue-900 dark:text-blue-200 capitalize">{first.original_status}</div>
+                    <div className="text-blue-700 dark:text-blue-300 uppercase">To Status</div>
+                    <div className="font-medium text-blue-900 dark:text-blue-200 capitalize">{first.requested_status}</div>
+                  </div>
+                </div>
+              )}
             </div>
           );
         } else {
@@ -2171,24 +2336,94 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
           <>
             {imageBlock}
             {detailsBlock}
+            
+            {/* Event Registrations Table - Only for events/activities */}
+            {first.type === 'requirement' && (() => {
+              const r = feeRequirements.find(r => r.requirement_id === first.target_id);
+              return r && (r.requirement_type === 'event' || r.requirement_type === 'activity') ? (
+                    <div className="mb-6">
+                  <h5 className="text-base font-semibold text-gray-900 dark:text-white mb-3">Registered Users ({eventRegistrations.length})</h5>
+                  <div className="max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-lg">
+                    {eventRegistrations.length > 0 ? (
+                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                        <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Student
+                            </th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Course & Section
+                            </th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Registered At
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-600">
+                          {eventRegistrations.map((registration: any, idx: number) => (
+                            <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <div className="flex items-center">
+                                  <img
+                                    className="h-8 w-8 rounded-full object-cover"
+                                    src={registration.avatar || placeholderImage}
+                                    alt={`${registration.user_fname} ${registration.user_lname}`}
+                                  />
+                                  <div className="ml-3">
+                                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                      {registration.user_fname} {registration.user_lname}
+          </div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                                      {registration.school_id}
+            </div>
+            </div>
+            </div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                {registration.course} {registration.year}-{registration.section}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {new Date(registration.registered_at).toLocaleDateString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+                        <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                        </svg>
+                        <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No registrations</h3>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                          No users have registered for this {r?.requirement_type} yet.
+                        </p>
+            </div>
+                    )}
+                  </div>
+                    </div>
+              ) : null;
+            })()}
           </>
         );
       })()}
       {/* All requesters */}
-      <div className="mb-6 min-h-[240px] max-h-72 overflow-y-auto pr-2">
-        <h5 className="text-base font-semibold text-gray-900 dark:text-white mb-2">Requesters</h5>
-        <div className="space-y-4">
+      <div className="mb-4 min-h-[200px] max-h-60 overflow-y-auto pr-2">
+        <h5 className="text-base font-semibold text-gray-900 dark:text-white mb-3">Requesters ({previewReqs.length})</h5>
+        <div className="space-y-3">
           {previewReqs.map((req, idx) => {
             const u = users.find(u => u.user_id === req.requested_by);
             return (
-              <div key={req.request_id} className="flex items-center gap-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 shadow-sm">
-                <img src={u?.avatar || placeholderImage} alt={u ? `${u.user_fname} ${u.user_lname}` : 'User'} className="w-12 h-12 rounded-full object-cover" />
-                <div className="flex-1">
-                  <div className="font-medium text-gray-900 dark:text-white">{u ? `${u.user_fname} ${u.user_lname}` : `User #${req.requested_by}`}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Requested at: {new Date(req.requested_at).toLocaleString()}</div>
-                  <div className="text-sm text-gray-700 dark:text-gray-300"><span className="font-semibold">Reason:</span> {req.reason || <span className="italic text-gray-400">No reason provided</span>}</div>
+              <div key={req.request_id} className="flex items-center gap-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm">
+                <img src={u?.avatar || placeholderImage} alt={u ? `${u.user_fname} ${u.user_lname}` : 'User'} className="w-10 h-10 rounded-full object-cover" />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-gray-900 dark:text-white truncate">{u ? `${u.user_fname} ${u.user_lname}` : `User #${req.requested_by}`}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">{new Date(req.requested_at).toLocaleDateString()}</div>
+                  <div className="text-sm text-gray-700 dark:text-gray-300 mt-1 line-clamp-2">
+                    <span className="font-semibold">Reason:</span> {req.reason || <span className="italic text-gray-400">No reason provided</span>}
+                  </div>
                 </div>
-                <span className={`capitalize px-2 py-1 rounded text-xs font-semibold ${
+                <span className={`capitalize px-2 py-1 rounded text-xs font-semibold flex-shrink-0 ${
                   req.status === 'approved' ? 'bg-green-100 text-green-800' :
                   req.status === 'denied' ? 'bg-red-100 text-red-800' :
                   'bg-yellow-100 text-yellow-800'
@@ -2206,7 +2441,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         >
           <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 3 20 20">
             <path fillRule="evenodd" d="M15.03 9.684h3.965c.322 0 .64.08.925.232.286.153.532.374.717.645a2.109 2.109 0 0 1 .242 1.883l-2.36 7.201c-.288.814-.48 1.355-1.884 1.355-2.072 0-4.276-.677-6.157-1.256-.472-.145-.924-.284-1.348-.404h-.115V9.478a25.485 25.485 0 0 0 4.238-5.514 1.8 1.8 0 0 1 .901-.83 1.74 1.74 0 0 1 1.21-.048c.396.13.736.397.96.757.225.36.32.788.269 1.211l-1.562 4.63ZM4.177 10H7v8a2 2 0 1 1-4 0v-6.823C3 10.527 3.527 10 4.176 10Z" clipRule="evenodd"/>
-        </svg>
+                        </svg>
           Approve
         </button>
         <button
@@ -2215,10 +2450,10 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         >
           <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M8.97 14.316H5.004c-.322 0-.64-.08-.925-.232a2.022 2.022 0 0 1-.717-.645 2.108 2.108 0 0 1-.242-1.883l2.36-7.201C5.769 3.54 5.96 3 7.365 3c2.072 0 4.276.678 6.156 1.256.473.145.925.284 1.35.404h.114v9.862a25.485 25.485 0 0 0-4.238 5.514c-.197.376-.516.67-.901.83a1.74 1.74 0 0 1-1.21.048 1.79 1.79 0 0 1-.96-.757 1.867 1.867 0 0 1-.269-1.211l1.562-4.63ZM19.822 14H17V6a2 2 0 1 1 4 0v6.823c0 .65-.527 1.177-1.177 1.177Z" clipRule="evenodd"/>
-        </svg>
+                        </svg>
           Deny
         </button>
-      </div>
+                      </div>
     </div>
   </div>
 )}
@@ -2227,10 +2462,37 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-80">
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
       <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white text-center">
-        {confirmAction.action === 'approve' ? 'Approve' : 'Deny'} Deletion Request{confirmAction.reqs.length > 1 ? 's' : ''}?
+        {(() => {
+          const hasEditRequests = confirmAction.reqs.some(r => r.approval_type === 'attendance_edit');
+          const hasDeleteRequests = confirmAction.reqs.some(r => r.approval_type === 'delete');
+          const actionText = confirmAction.action === 'approve' ? 'Approve' : 'Deny';
+          
+          if (hasEditRequests && hasDeleteRequests) {
+            return `${actionText} Request${confirmAction.reqs.length > 1 ? 's' : ''}?`;
+          } else if (hasEditRequests) {
+            return `${actionText} Edit Request${confirmAction.reqs.length > 1 ? 's' : ''}?`;
+          } else {
+            return `${actionText} Deletion Request${confirmAction.reqs.length > 1 ? 's' : ''}?`;
+          }
+        })()}
       </h3>
       <p className="mb-6 text-gray-600 dark:text-gray-300 text-base text-center">
-        Are you sure you want to {confirmAction.action} {confirmAction.reqs.length > 1 ? 'these requests' : 'this request'}? This action cannot be undone.
+        {(() => {
+          const hasEditRequests = confirmAction.reqs.some(r => r.approval_type === 'attendance_edit');
+          const hasDeleteRequests = confirmAction.reqs.some(r => r.approval_type === 'delete');
+          const actionText = confirmAction.action;
+          const requestText = confirmAction.reqs.length > 1 ? 'these requests' : 'this request';
+          
+          if (hasEditRequests && hasDeleteRequests) {
+            return `Are you sure you want to ${actionText} ${requestText}? This action cannot be undone.`;
+          } else if (hasEditRequests) {
+            const changeText = confirmAction.reqs.length > 1 ? 'these attendance changes' : 'this attendance change';
+            return `Are you sure you want to ${actionText} ${changeText}? This action cannot be undone.`;
+          } else {
+            const deleteText = confirmAction.reqs.length > 1 ? 'these deletions' : 'this deletion';
+            return `Are you sure you want to ${actionText} ${deleteText}? This action cannot be undone.`;
+          }
+        })()}
       </p>
       <div className="flex justify-center items-center space-x-4 mt-4">
         <button
@@ -2250,8 +2512,8 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         >
           Yes, {confirmAction.action === 'approve' ? 'approve' : 'deny'}
         </button>
-      </div>
-    </div>
+                      </div>
+          </div>
   </div>
 )}
         

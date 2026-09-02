@@ -1,5 +1,5 @@
 <?php
-header("Access-Control-Allow-Origin: http://localhost:5173");
+require_once __DIR__ . '/cors.php';
 header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
@@ -104,8 +104,10 @@ try {
     $user_id
   ]);
 
-  $link = "http://localhost:5173/register?invite=$token";
-  echo json_encode(['link' => $link]);
+  // Return a relative path so the frontend can bind the invite to the origin
+  // the adviser is currently using, including forwarded development tunnels.
+  $link = '/register?invite=' . rawurlencode($token);
+  echo json_encode(['link' => $link, 'token' => $token]);
 }  
   
 catch (PDOException $e) {

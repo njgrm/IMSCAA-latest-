@@ -2,8 +2,7 @@
 session_start();
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
-
-header("Access-Control-Allow-Origin: http://localhost:5173");
+require_once __DIR__ . '/cors.php';
 header("Access-Control-Allow-Headers: Content-Type");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Content-Type: application/json; charset=utf-8");
@@ -159,7 +158,6 @@ try {
   $stmtClub->execute([$clubName]);
   $clubId = $pdo->lastInsertId();
 
-  // 3) create the user, pointing at that club
   $stmtUser = $pdo->prepare("
     INSERT INTO users (
       username, password, email, role, club_id, school_id,

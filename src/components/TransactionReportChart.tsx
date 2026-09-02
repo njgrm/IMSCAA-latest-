@@ -16,7 +16,7 @@ const TransactionReportChart: React.FC<ChartProps> = ({ paid, unpaid, partial })
         fontFamily: "Inter, sans-serif",
       },
     labels: ["Paid", "Unpaid", "Partial"],
-    colors: ["#059669", "#dc2626", "#f59e42"],
+    colors: ["#059669", "#f05252", "#f59e42"],
     legend: {
       position: "bottom",
       fontSize: '16px',

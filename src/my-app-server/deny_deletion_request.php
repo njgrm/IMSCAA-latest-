@@ -1,7 +1,7 @@
 <?php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
-header("Access-Control-Allow-Origin: http://localhost:5173");
+require_once __DIR__ . '/cors.php';
 header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
@@ -36,11 +36,11 @@ if ($request_ids && is_array($request_ids)) {
         if (!$rid) continue;
         try {
             $pdo = new PDO("mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4", "root", "", [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-            $stmt = $pdo->prepare("UPDATE deletion_requests SET status = 'denied', approved_by = ?, approved_at = NOW() WHERE request_id = ? AND status = 'pending'");
+            $stmt = $pdo->prepare("UPDATE approval_requests SET status = 'denied', approved_by = ?, approved_at = NOW() WHERE request_id = ? AND status = 'pending'");
             $stmt->execute([$_SESSION['user_id'], $rid]);
             $results[] = ['request_id' => $rid, 'success' => true];
             // fetch info for notification
-            $stmt2 = $pdo->prepare("SELECT * FROM deletion_requests WHERE request_id = ?");
+            $stmt2 = $pdo->prepare("SELECT * FROM approval_requests WHERE request_id = ?");
             $stmt2->execute([$rid]);
             $req = $stmt2->fetch(PDO::FETCH_ASSOC);
             if ($req) {
@@ -62,11 +62,11 @@ if (!$request_id) {
 
 try {
     $pdo = new PDO("mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4", "root", "", [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-    $stmt = $pdo->prepare("UPDATE deletion_requests SET status = 'denied', approved_by = ?, approved_at = NOW() WHERE request_id = ? AND status = 'pending'");
+    $stmt = $pdo->prepare("UPDATE approval_requests SET status = 'denied', approved_by = ?, approved_at = NOW() WHERE request_id = ? AND status = 'pending'");
     $stmt->execute([$_SESSION['user_id'], $request_id]);
     echo json_encode(['success' => true]);
     // fetch info for notification
-    $stmt2 = $pdo->prepare("SELECT * FROM deletion_requests WHERE request_id = ?");
+    $stmt2 = $pdo->prepare("SELECT * FROM approval_requests WHERE request_id = ?");
     $stmt2->execute([$request_id]);
     $req = $stmt2->fetch(PDO::FETCH_ASSOC);
     if ($req) {

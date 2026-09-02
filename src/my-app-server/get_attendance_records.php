@@ -2,8 +2,7 @@
 // get_attendance_records.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
-
-header("Access-Control-Allow-Origin: http://localhost:5173");
+require_once __DIR__ . '/cors.php';
 header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
@@ -26,16 +25,15 @@ if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
 $clubId = (int)$_SESSION['club_id'];
 
 try {
-    $pdo = new PDO("mysql:host=localhost;dbname=imscca", "root", "");
+    $pdo = new PDO("mysql:host=localhost;dbname=db_imscca", "root", "");
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    // Get attendance records with joined user, event, and time slot information
     $sql = "
         SELECT 
             ar.attendance_id,
             ar.user_id,
             ar.requirement_id,
-            ar.time_slot_id,
+            ar.slot_id,
             ar.verified_by,
             ar.club_id,
             ar.scan_datetime,
@@ -58,6 +56,7 @@ try {
             ts.slot_name,
             ts.start_time,
             ts.end_time,
+            ts.date as slot_date,
             
             -- Verifier information
             v.user_fname as verifier_fname,
@@ -72,7 +71,7 @@ try {
         INNER JOIN requirements r ON ar.requirement_id = r.requirement_id
         
         -- Left join with time slots (optional)
-        LEFT JOIN attendance_time_slots ts ON ar.time_slot_id = ts.slot_id
+        LEFT JOIN attendance_time_slots ts ON ar.slot_id = ts.slot_id
         
         -- Join with users table for verifier info
         INNER JOIN users v ON ar.verified_by = v.user_id
@@ -87,12 +86,11 @@ try {
     
     $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Convert numeric fields to proper types
     foreach ($records as &$record) {
         $record['attendance_id'] = (int)$record['attendance_id'];
         $record['user_id'] = (int)$record['user_id'];
         $record['requirement_id'] = (int)$record['requirement_id'];
-        $record['time_slot_id'] = $record['time_slot_id'] ? (int)$record['time_slot_id'] : null;
+        $record['slot_id'] = $record['slot_id'] ? (int)$record['slot_id'] : null;
         $record['verified_by'] = (int)$record['verified_by'];
         $record['club_id'] = (int)$record['club_id'];
         $record['year'] = (int)$record['year'];

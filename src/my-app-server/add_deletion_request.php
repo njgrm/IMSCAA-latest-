@@ -1,5 +1,5 @@
 <?php
-header("Access-Control-Allow-Origin: http://localhost:5173");
+require_once __DIR__ . '/cors.php';
 header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
@@ -37,7 +37,7 @@ if (!in_array($type, $valid_types) || !$target_id) {
 
 try {
     $pdo = new PDO("mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4", "root", "", [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-    $stmt = $pdo->prepare("INSERT INTO deletion_requests (type, target_id, club_id, requested_by, reason) VALUES (?, ?, ?, ?, ?)");
+    $stmt = $pdo->prepare("INSERT INTO approval_requests (type, target_id, club_id, requested_by, reason) VALUES (?, ?, ?, ?, ?)");
     $stmt->execute([$type, $target_id, $_SESSION['club_id'], $_SESSION['user_id'], $reason]);
     echo json_encode(['success' => true]);
 } catch (PDOException $e) {

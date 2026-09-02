@@ -30,7 +30,7 @@ const ProfileMenu: React.FC = () => {
     const fetchUserData = async () => {
       try {
         setLoading(true)
-        const response = await fetch('http://localhost/my-app-server/get_current_user.php', {
+        const response = await fetch('/my-app-server/get_current_user.php', {
           method: 'GET',
           credentials: 'include',
         })
@@ -78,7 +78,7 @@ const ProfileMenu: React.FC = () => {
   // Sign-out handler
   const handleSignOut = async () => {
     try {
-      await fetch('http://localhost/my-app-server/logout.php', {
+      await fetch('/my-app-server/logout.php', {
         method: 'POST',
         credentials: 'include'
       })

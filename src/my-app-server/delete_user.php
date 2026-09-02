@@ -3,7 +3,7 @@
 session_start();
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
-header("Access-Control-Allow-Origin: http://localhost:5173");
+require_once __DIR__ . '/cors.php';
 header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
@@ -54,15 +54,12 @@ $delTx->execute([
 ':club' => $club_id
 ]);
 
-// 2) Now delete the user
 $stmt = $pdo->prepare("DELETE FROM users WHERE user_id = ? AND club_id = ?");
 $stmt->execute([$user_id, $club_id]);
 
-  // Delete operation remains the same
   $stmt = $pdo->prepare("DELETE FROM `users` WHERE user_id = ? AND club_id = ?");
   $stmt->execute([$user_id, $club_id]);
 
-  // Updated select with explicit fields
   $stmt2 = $pdo->prepare("
     SELECT 
         user_id, school_id, user_fname, user_mname, user_lname,

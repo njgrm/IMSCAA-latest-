@@ -4,7 +4,7 @@ ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    header("Access-Control-Allow-Origin: http://localhost:5173");
+require_once __DIR__ . '/cors.php';
     header("Access-Control-Allow-Credentials: true");
     header("Access-Control-Allow-Methods: POST, OPTIONS");
     header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
@@ -12,8 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
     exit;
 }
-
-header("Access-Control-Allow-Origin: http://localhost:5173");
+require_once __DIR__ . '/cors.php';
 header("Access-Control-Allow-Credentials: true");
 header("Content-Type: application/json");
 session_start();
@@ -52,7 +51,6 @@ try {
       "root","",[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]
     );
 
-    // 1) Pull the club’s fee records
     $inReq = implode(',', array_fill(0, count($reqIds), '?'));
     $stmt = $pdo->prepare("
       SELECT requirement_id,
@@ -77,7 +75,6 @@ try {
       }
     }
 
-    // 2) Insert all combinations, using the passed-in values
     $pdo->beginTransaction();
     $sql = "
       INSERT INTO transactions

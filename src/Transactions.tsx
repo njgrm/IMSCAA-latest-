@@ -62,7 +62,7 @@ const Transactions: React.FC = () => {
   const [selectedFees, setSelectedFees] = useState<number[]>([]);
   const [search, setSearch] = useState("");
   const { theme } = useContext(ThemeContext);
-  const [currentUser, setCurrentUser] = useState<{ user_id: number } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ user_id: number; role: string } | null>(null);
   const [selectedTxns, setSelectedTxns] = useState<number[]>([]);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editTxnId, setEditTxnId] = useState<number | null>(null);
@@ -243,7 +243,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
     e.preventDefault();
     if (!editTxnId) return;
     try {
-      const res = await fetch("http://localhost/my-app-server/update_transaction.php", {
+      const res = await fetch("/my-app-server/update_transaction.php", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -282,7 +282,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 
   const fetchTransactions = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/get_transaction.php", {
+      const res = await fetch("/my-app-server/get_transaction.php", {
         credentials: "include",
       });
       const dataRaw = await res.json();
@@ -307,7 +307,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/get_user.php", {
+      const res = await fetch("/my-app-server/get_user.php", {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to load users");
@@ -320,7 +320,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
   
   const fetchFeeRequirements = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/get_fee_requirement.php", {
+      const res = await fetch("/my-app-server/get_fee_requirement.php", {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to load fees");
@@ -342,7 +342,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 
   const fetchCurrentUser = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/get_current_user.php", {
+      const res = await fetch("/my-app-server/get_current_user.php", {
         credentials: "include",
       });
       const data = await res.json();
@@ -373,10 +373,10 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
   const openAddModal = async () => {
     try {
       const [usersRes, feesRes] = await Promise.all([
-        fetch("http://localhost/my-app-server/get_user.php", {
+        fetch("/my-app-server/get_user.php", {
           credentials: "include",
         }),
-        fetch("http://localhost/my-app-server/get_fee_requirement.php", {
+        fetch("/my-app-server/get_fee_requirement.php", {
           credentials: "include",
         })
       ]);
@@ -445,7 +445,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
     }
 
     try {
-      const res = await fetch("http://localhost/my-app-server/add_transaction.php", {
+      const res = await fetch("/my-app-server/add_transaction.php", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -479,14 +479,14 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 
   // Update deleteTransaction to use reason
   function deleteTransaction(txnId: number, reasonOverride?: string): Promise<void> {
-    return fetch("http://localhost/my-app-server/get_current_user.php", { credentials: "include" })
+    return fetch("/my-app-server/get_current_user.php", { credentials: "include" })
       .then(res => res.json())
       .then(user => {
         const role = user.role ? user.role.toLowerCase() : null;
         if (role === 'adviser') {
           // Adviser: delete directly
           return fetch(
-            `http://localhost/my-app-server/delete_transaction.php?transaction_id=${txnId}`,
+            `/my-app-server/delete_transaction.php?transaction_id=${txnId}`,
             {
               method: "DELETE",
               credentials: "include",
@@ -499,7 +499,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         } else {
           // President/Officer: request deletion
           const reasonToSend = reasonOverride || deleteReason.trim() || "Request to delete transaction.";
-          return fetch("http://localhost/my-app-server/add_deletion_request.php", {
+          return fetch("/my-app-server/add_deletion_request.php", {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
@@ -574,7 +574,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
     e.preventDefault();
     if (!updateTxnId) return;
     try {
-      const res = await fetch("http://localhost/my-app-server/update_transactions.php", {
+      const res = await fetch("/my-app-server/update_transactions.php", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -648,7 +648,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 
   const fetchMyDeletionRequests = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/get_deletion_requests.php", { credentials: "include" });
+      const res = await fetch("/my-app-server/get_deletion_requests.php", { credentials: "include" });
       const data = await res.json();
       setMyDeletionRequests(Array.isArray(data) ? data : []);
     } catch (e) {
@@ -662,7 +662,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 
   const cancelDeletionRequest = async (requestId: number) => {
     try {
-      const res = await fetch("http://localhost/my-app-server/cancel_deletion_request.php", {
+      const res = await fetch("/my-app-server/cancel_deletion_request.php", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -695,65 +695,75 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
       const r = requirementMap[t.requirement_id];
       improvedDeleteModal = (
         <Modal show={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }} size="lg">
-          <Modal.Header className="dark:bg-gray-800">Request Transaction Deletion</Modal.Header>
-          <Modal.Body className="dark:bg-gray-800 dark:text-white rounded">
-            <form className="space-y-6 overflow-y-auto max-h-[80vh]">
-              <div className="rounded-lg shadow bg-white dark:bg-gray-900 p-5 flex flex-col md:flex-row gap-6 items-center border border-gray-200 dark:border-gray-700">
-                <img src={u?.avatar || placeholderImage} alt="Student" className="w-32 h-32 rounded-full object-cover border border-gray-300 dark:border-gray-700" />
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl font-bold text-gray-900 dark:text-white">{u ? `${u.user_fname} ${u.user_lname}` : `#${t.user_id}`}</span>
-                    <span className={`capitalize px-2 py-1 rounded text-xs font-semibold ml-2 ${
-                      t.payment_status === 'paid' ? 'bg-green-100 text-green-800' :
-                      t.payment_status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>{t.payment_status}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-4 mt-2">
-                    <div className="flex items-center gap-1 text-gray-700 dark:text-gray-300">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                      <span>{new Date(t.due_date).toLocaleDateString()}</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-gray-700 dark:text-gray-300">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 0V4m0 7v7" /></svg>
-                      <span>₱{r?.amount_due.toFixed(2) ?? '–'}</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-gray-700 dark:text-gray-300">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 12.414a4 4 0 10-1.414 1.414l4.243 4.243a1 1 0 001.414-1.414z" /></svg>
-                      <span>{r?.title || '–'}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-yellow-50 dark:bg-yellow-900/30 p-3 rounded-lg border border-yellow-200 dark:border-yellow-700 mb-4">
-                <div className="flex items-center text-yellow-800 dark:text-yellow-200">
-                  <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path>
-                  </svg>
-                  <span className="font-medium">Note:</span>
-                </div>
-                <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                  Deletion will remove this transaction. This action cannot be undone once approved by the adviser.
+          <Modal.Body className="p-4 text-center bg-white dark:bg-gray-800 rounded-lg shadow sm:p-5">
+            <button
+              onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}
+              className="absolute top-2.5 right-2.5 text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              <span className="sr-only">Close modal</span>
+            </button>
+
+            <svg className="text-gray-400 dark:text-gray-500 w-11 h-11 mb-3.5 mx-auto" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+              <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"></path>
+            </svg>
+
+            {/* Dynamic content based on user role */}
+            {currentUser?.role?.toLowerCase() === 'adviser' ? (
+              <>
+                <p className="mb-4 text-gray-500 dark:text-gray-300">
+                  Are you sure you want to delete the transaction for {u ? `${u.user_fname} ${u.user_lname}` : `#${t.user_id}`}?
                 </p>
-              </div>
-              <div>
-                <label className="block text-sm mb-1">Reason for deletion (optional)</label>
-                <textarea
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
-                  value={deleteReason}
-                  onChange={e => setDeleteReason(e.target.value)}
-                  placeholder="e.g. Duplicate, error, etc."
-                  rows={3}
-                />
-              </div>
-              <div className="flex justify-start space-x-2 mt-4">
-                <Button type="button" color="failure" onClick={async () => {
+                <p className="mb-4 text-sm text-gray-400 dark:text-gray-400">
+                  This will permanently remove the transaction record. This action cannot be undone.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mb-4 text-gray-500 dark:text-gray-300">
+                  Request deletion of transaction for {u ? `${u.user_fname} ${u.user_lname}` : `#${t.user_id}`}?
+                </p>
+                <p className="mb-4 text-sm text-gray-400 dark:text-gray-400">
+                  This will send a deletion request to an adviser for approval.
+                </p>
+                
+                {/* Reason field for requests */}
+                <div className="mb-4 text-left">
+                  <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Reason (optional)
+                  </label>
+                  <textarea
+                    className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400 text-gray-900 dark:text-white"
+                    value={deleteReason}
+                    onChange={e => setDeleteReason(e.target.value)}
+                    placeholder="e.g. Duplicate, error, etc."
+                    rows={3}
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="flex justify-center items-center space-x-4">
+              <button
+                onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}
+                className="py-2 px-3 text-sm font-medium text-gray-500 bg-white rounded-lg border border-gray-200 hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-primary-300 hover:text-gray-900 focus:z-10 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-500 dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-600"
+              >
+                No, cancel
+              </button>
+              <button
+                onClick={async () => {
                   if (!deleteTxnId) return;
                   try {
                     await deleteTransaction(deleteTxnId, deleteReason.trim() || "Request to delete transaction.");
-                    toast.success("Delete request sent for approval");
+                    if (currentUser?.role?.toLowerCase() === 'adviser') {
+                      toast.success("Transaction deleted successfully!");
+                    } else {
+                      toast.success("Delete request sent for approval");
+                    }
                     await fetchTransactions();
-                    await fetchMyDeletionRequests(); // <-- Add this line to refresh deletion requests
+                    await fetchMyDeletionRequests();
                   } catch (err: any) {
                     toast.error(err.message);
                   } finally {
@@ -761,14 +771,12 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                     setDeleteTxnId(null);
                     setDeleteReason("");
                   }
-                }} className="px-8 bg-red-600 hover:bg-red-700 text-white">
-                  Request Deletion
-                </Button>
-                <Button type="button" color="gray" onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }} className="border border-gray-300 dark:border-gray-600">
-                  Cancel
-                </Button>
-              </div>
-            </form>
+                }}
+                className="py-2 px-3 text-sm font-medium text-center text-white bg-red-600 rounded-lg hover:bg-red-700 focus:ring-4 focus:outline-none focus:ring-red-300 dark:bg-red-500 dark:hover:bg-red-600 dark:focus:ring-red-900"
+              >
+                {currentUser?.role?.toLowerCase() === 'adviser' ? "Yes, I'm sure" : "Yes, request deletion"}
+              </button>
+            </div>
           </Modal.Body>
         </Modal>
       );
@@ -785,9 +793,9 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
   }, []);
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 py-14">
+    <div className="flex min-h-screen min-w-0 w-full bg-gray-50 dark:bg-gray-900 py-14">
       <Sidebar />
-      <div className="flex-1 sm:ml-64 relative flex flex-col">
+      <div className="flex min-w-0 flex-1 sm:ml-64 relative flex-col">
         <div className="p-3 sm:px-5 sm:pt-5 sm:pb-1">
           <Breadcrumb items={trail} />
           <div className="flex flex-col sm:flex-row sm:items-center justify-between dark:border-gray-700 pt-0 mb-0 gap-4 sm:gap-0">
@@ -836,7 +844,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                         }`}
                     >
                        <svg className="w-5 h-5 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
+                            <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
                         </svg>
                         Mass Update
                     </Button>
@@ -871,9 +879,9 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
-          <div ref={tableRef} className="overflow-x-auto shadow-md relative z-10">
-            <table className="min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow dark:text-white text-s">
+        <div className="min-w-0 flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
+          <div ref={tableRef} className="responsive-table-frame shadow-md relative z-10">
+            <table className="responsive-table-cards min-w-0 sm:min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow dark:text-white text-s">
               <thead className="bg-gray-100 dark:bg-gray-700">
                 <tr>
                   <th className="px-2 py-2 pl-0">
@@ -906,7 +914,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                     onClick={() => toggleTxn(t.transaction_id)}
                      className="border-b cursor-pointer dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 ">
                       {/* Checkbox */}
-                      <td className="px-4 py-2">
+                      <td data-label="Select" className="px-4 py-2">
                         <input
                           type="checkbox"
                           checked={selectedTxns.includes(t.transaction_id)}
@@ -916,7 +924,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                         />
                       </td>
                       {/* Name + Avatar */}
-                      <td className="px-4 py-2 flex items-center">
+                      <td data-label="Name" className="px-4 py-2 flex items-center">
                         <img
                        src={u?.avatar || placeholderImage}
                        alt={`${u?.user_fname} avatar`}
@@ -924,12 +932,12 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                         />
                         {u ? `${u.user_fname} ${u.user_lname}` : `#${t.user_id}`}
                       </td>
-                      <td className="px-4 py-2">{u?.year ?? '–'}</td>
-                      <td className="px-4 py-2">{u?.section || '–'}</td>
-                      <td className="px-4 py-2">{r?.title || '–'}</td>
-                      <td className="px-4 py-2">₱{r?.amount_due.toFixed(2)}</td>
-                      <td className="px-4 py-2">₱{t.amount_paid.toFixed(2)}</td>
-                      <td className="px-4 py-2">
+                      <td data-label="Year" className="px-4 py-2">{u?.year ?? '–'}</td>
+                      <td data-label="Section" className="px-4 py-2">{u?.section || '–'}</td>
+                      <td data-label="Fee Title" className="px-4 py-2">{r?.title || '–'}</td>
+                      <td data-label="Amount Due" className="px-4 py-2">₱{r?.amount_due.toFixed(2)}</td>
+                      <td data-label="Amount Paid" className="px-4 py-2">₱{t.amount_paid.toFixed(2)}</td>
+                      <td data-label="Status" className="px-4 py-2">
                         <span className={`capitalize px-2 py-1 rounded ${
                           t.payment_status === 'paid' ? 'bg-green-100 text-green-800'
                           : t.payment_status === 'partial' ? 'bg-yellow-100 text-yellow-800'
@@ -937,9 +945,9 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                           {t.payment_status}
                         </span>
                       </td>
-                      <td className="px-4 py-2">{new Date(t.due_date).toLocaleDateString()}</td>
+                      <td data-label="Due Date" className="px-4 py-2">{new Date(t.due_date).toLocaleDateString()}</td>
                       {/* Actions */}
-                      <td className="px-4 py-3 space-x-2 flex items-center">
+                      <td data-label="Actions" className="px-4 py-3 space-x-2 flex items-center">
                         <button
                          onClick={(e) => {e.stopPropagation(); openEdit(t);}}
                           className="flex items-center justify-center px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-400 whitespace-nowrap transition-transform duration-200 ease-in-out transform hover:scale-105"
@@ -955,7 +963,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                           className="flex items-center justify-center px-2 py-2 text-sm bg-secondary-500 text-white rounded-lg hover:bg-secondary-400 whitespace-nowrap transition-transform duration-200 ease-in-out transform hover:scale-105"
                         >
                             <svg className="w-4 h-4 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
+                            <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
                                 </svg>
 
                           Update
@@ -991,7 +999,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                                <svg aria-hidden="true" className="w-5 h-4 mr-1.5 -ml-1" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" clipRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"/>
                             </svg>
-                          Request
+                          {currentUser?.role?.toLowerCase() === 'adviser' ? 'Delete' : 'Request'}
                         </button>
                         )}
                       </td>
@@ -1693,7 +1701,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                     <Button
                         onClick={async () => {
                             try {
-                            const res = await fetch("http://localhost/my-app-server/update_transaction.php", {
+                            const res = await fetch("/my-app-server/update_transaction.php", {
                                 method: "POST",
                                 credentials: "include",
                                 headers: { "Content-Type": "application/json" },
@@ -1967,7 +1975,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
             <Button
                 onClick={async () => {
                     try {
-                    const res = await fetch("http://localhost/my-app-server/update_transactions.php", {
+                    const res = await fetch("/my-app-server/update_transactions.php", {
                         method: "POST",
                         credentials: "include",
                         headers: { "Content-Type": "application/json" },

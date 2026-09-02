@@ -50,7 +50,7 @@ const FilterDropdownReq: React.FC<FilterDropdownProps> = ({
     </button>
 
            <div
-              className={`absolute right-0 z-50 mt-2 w-80 bg-white rounded-lg shadow dark:bg-gray-700 px-4 py-4 pt-1 border border-gray-200 dark:border-gray-600 transform-gpu transition-[opacity,transform] duration-600 ease-[cubic-bezier(0.16,1,0.3,1)] origin-top overflow-hidden ${
+              className={`absolute right-0 z-50 mt-2 w-[min(20rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)] bg-white rounded-lg shadow dark:bg-gray-700 px-4 py-4 pt-1 border border-gray-200 dark:border-gray-600 transform-gpu transition-[opacity,transform] duration-600 ease-[cubic-bezier(0.16,1,0.3,1)] origin-top overflow-hidden ${
                 isOpen 
                   ? 'opacity-100 translate-y-0 pointer-events-auto visible' 
                   : 'opacity-0 -translate-y-4 pointer-events-none invisible'

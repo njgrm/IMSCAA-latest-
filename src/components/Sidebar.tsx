@@ -1,15 +1,15 @@
-import React, { useState, useContext, useRef, useEffect } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import headerlogo from '../assets/headerlogo.png';
 import headerlogoDark from '../assets/headerlogoDark.png';
 import ProfileMenu from './ProfileMenu'
 import { ThemeContext } from '../theme/ThemeContext';
+import { useUser } from '../context/UserContext';
 
 interface SidebarProps {
   isDarkMode: boolean;
   toggleDarkMode: () => void;
 }
-
 
 interface NavItem {
   to: string;
@@ -92,7 +92,7 @@ const navItems: NavItem[] = [
     ),
     sub: [
       { to: '/reports/clearance',       label: 'Clearance Completion' },
-      { to: '/reports/event-attendance',label: 'Event Attendance' },
+      { to: '/reports/attendance-report',label: 'Event Attendance' },
       { to: '/reports/transaction-report', label: 'Transactional Fees' },
     ]
   },
@@ -108,29 +108,14 @@ const navItems: NavItem[] = [
 ];
 
 const Sidebar: React.FC = () => {
-  const { theme, setTheme } = useContext(ThemeContext);
-  const isDarkMode = theme === 'dark';
-  const toggleDarkMode = () => setTheme(isDarkMode ? 'light' : 'dark');
+  const { theme } = useContext(ThemeContext);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isRequirementsOpen, setIsRequirementsOpen] = useState(false);
   const [openReports, setOpenReports] = useState(false);
   const [openAttendance, setOpenAttendance] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
-  const itemRefs = useRef<Record<string, HTMLLIElement>>({});
-  const [highlight, setHighlight] = useState({ top: 0, height: 0 });
   const { pathname } = useLocation();
-  const highlightRef = useRef<HTMLDivElement>(null);
   const [activeItem, setActiveItem] = useState<string | null>(null);
-  const [reportsManuallyOpen, setReportsManuallyOpen] = useState(false);
-  const [attendanceManuallyOpen, setAttendanceManuallyOpen] = useState(false);
-  const [userRole, setUserRole] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch('http://localhost/my-app-server/get_current_user.php', { credentials: 'include' })
-      .then(res => res.json())
-      .then(data => setUserRole(data.role ? data.role.toLowerCase() : null))
-      .catch(() => setUserRole(null));
-  }, []);
+  const { userRole, isLoading } = useUser();
 
   const filteredNavItems = React.useMemo(() => {
     if (userRole === 'member') {
@@ -143,18 +128,19 @@ const Sidebar: React.FC = () => {
     return navItems;
   }, [userRole]);
 
-  // Find active item based on pathname
+  // Find active item and manage submenu states
   useEffect(() => {
     let activeKey: string | undefined;
-    let reportsHasActive = false;
-    let attendanceHasActive = false;
+    let shouldOpenReports = false;
+    let shouldOpenAttendance = false;
+    
     for (let itm of filteredNavItems) {
       if (itm.sub) {
         const sub = itm.sub.find(s => pathname.startsWith(s.to));
         if (sub) { 
           activeKey = sub.to;
-          if (itm.to === '/reports') reportsHasActive = true;
-          if (itm.to === '/attendance') attendanceHasActive = true;
+          if (itm.to === '/reports') shouldOpenReports = true;
+          if (itm.to === '/attendance') shouldOpenAttendance = true;
           break; 
         }
       }
@@ -163,34 +149,31 @@ const Sidebar: React.FC = () => {
         break;
       }
     }
-    // Reset manual open if navigating to a sub-route
-    if (reportsHasActive) setReportsManuallyOpen(false);
-    if (attendanceHasActive) setAttendanceManuallyOpen(false);
     
-    setOpenReports(reportsHasActive || reportsManuallyOpen);
-    setOpenAttendance(attendanceHasActive || attendanceManuallyOpen);
+    // Only update submenu states if they should change based on active route
+    // Don't close submenus that are manually opened
+    if (shouldOpenReports) setOpenReports(true);
+    if (shouldOpenAttendance) setOpenAttendance(true);
     
-    if (activeKey && itemRefs.current[activeKey]) {
-      setActiveItem(activeKey);
-      const el = itemRefs.current[activeKey]!;
-      setHighlight({ top: el.offsetTop, height: el.offsetHeight });
-    }
-  }, [pathname, reportsManuallyOpen, attendanceManuallyOpen, filteredNavItems]);
+    setActiveItem(activeKey || null);
+  }, [pathname, filteredNavItems]);
 
-  // Only show highlight if the item is visible
-  const showHighlight = (() => {
-    // If activeItem is a sub-route of Reports or Attendance, only show highlight if submenu is open
-    const reportsSubRoutes = filteredNavItems.find(i => i.to === '/reports')?.sub?.map(s => s.to) || [];
-    const attendanceSubRoutes = filteredNavItems.find(i => i.to === '/attendance')?.sub?.map(s => s.to) || [];
-    
-    if (reportsSubRoutes.includes(activeItem || '')) {
-      return openReports;
-    }
-    if (attendanceSubRoutes.includes(activeItem || '')) {
-      return openAttendance;
-    }
-    return true;
-  })();
+  useEffect(() => {
+    if (!sidebarOpen) return;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSidebarOpen(false);
+    };
+
+    document.addEventListener('keydown', closeOnEscape);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.removeEventListener('keydown', closeOnEscape);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [sidebarOpen]);
 
   return (
     <>
@@ -204,6 +187,7 @@ const Sidebar: React.FC = () => {
                   type="button"
                    className="inline-flex items-center p-2 text-sm text-gray-500 sm:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700"
                    onClick={() => setSidebarOpen(o => !o)}
+                  aria-expanded={sidebarOpen}
                   aria-label="Toggle sidebar"
                 >
                 <svg className="w-6 h-6" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
@@ -214,7 +198,7 @@ const Sidebar: React.FC = () => {
               {/* Logo */}
               <Link to="/dashboard" className="flex items-center ml-2 md:ml-4">
                 <img
-                  src={isDarkMode ? headerlogoDark : headerlogo}
+                  src={theme === 'dark' ? headerlogoDark : headerlogo}
                   alt="Logo"
                   className="h-8 me-3"
                 />
@@ -238,143 +222,138 @@ const Sidebar: React.FC = () => {
         </div>
       </nav>
 
-      <aside className={`fixed top-0 left-0 h-screen w-64 pt-20 bg-white dark:bg-gray-800 border-r dark:border-gray-700 transition-transform ${sidebarOpen? 'translate-x-10':'-translate-x-full'} sm:translate-x-0`}>
-      <ul className="relative space-y-1 font-medium overflow-y-auto h-full px-2">
-        {/* sliding highlight */}
-        {showHighlight && (
-        <div
-          ref={highlightRef}
-          className="absolute left-2 right-4 bg-primary-600 rounded transition-transform duration-300 ease-in-out will-change-transform"
-          style={{ 
-            top: highlight.top,
-            height: highlight.height,
-            transform: `translateY(0)` 
-          }}
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-30 bg-gray-900/50 sm:hidden"
         />
-        )}
+      )}
 
-        {filteredNavItems.map(item => {
-          const isActive = activeItem === item.to || (item.sub && item.sub.some(s => activeItem === s.to));
-          
-          return (
-            <React.Fragment key={item.to}>
-              <li
-                ref={el => {
-                  if (el) itemRefs.current[item.to] = el;
-                }}
-                className="relative z-10"
+      <aside className={`fixed top-0 left-0 z-40 h-screen w-64 pt-20 bg-white dark:bg-gray-800 border-r dark:border-gray-700 transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} sm:translate-x-0`}>
+      <ul className="relative h-full space-y-1 overflow-y-auto px-2 pb-4 font-medium">
+        {isLoading ? (
+          // Loading skeleton while fetching user role
+          <div className="space-y-1 px-2 py-2">
+            {[...Array(6)].map((_, index) => (
+              <div
+                key={index}
+                className="animate-pulse flex items-center px-4 py-2 rounded"
               >
-                {item.sub ? (
-                  <button
-                    onClick={() => {
-                      // Only allow manual toggle if not on a sub-route
-                      const itemSubRoutes = item.sub?.map(s => s.to) || [];
-                      const isOnSubRoute = itemSubRoutes.some(r => pathname.startsWith(r));
-                      
-                      if (!isOnSubRoute) {
+                <div className="w-5 h-5 bg-gray-300 dark:bg-gray-600 rounded mr-2"></div>
+                <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded flex-1"></div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          filteredNavItems.map(item => {
+            const isActive = activeItem === item.to || (item.sub && item.sub.some(s => activeItem === s.to));
+            
+            return (
+              <React.Fragment key={item.to}>
+                <li className="relative z-10">
+                  {item.sub ? (
+                    <button
+                      onClick={() => {
+                        // Toggle submenu when clicking on the main item
                         if (item.to === '/reports') {
-                          setReportsManuallyOpen(o => !o);
+                          setOpenReports(prev => !prev);
                         } else if (item.to === '/attendance') {
-                          setAttendanceManuallyOpen(o => !o);
+                          setOpenAttendance(prev => !prev);
                         }
-                      }
-                    }}
-                    className={`w-full flex justify-between items-center px-4 py-2 transition-all duration-200 ease-in-out hover:scale-[1.02] transform group ${
-                      isActive 
-                        ? 'text-white' 
-                        : 'text-gray-900 dark:text-white hover:text-primary-400 dark:hover:text-primary-400'
-                    }`}
-                  >
-                    <div className="flex items-center">
-                      {item.icon && (
-                        <div className={`transition-colors duration-200 ${
-                          isActive 
-                            ? 'text-white hover:text-white' 
-                            : 'text-gray-800 dark:text-white group-hover:text-primary-400 dark:group-hover:text-primary-400'
-                        }`}>
-                          {item.icon}
-                        </div>
-                      )}
-                      {item.label}
-                    </div>
-                    <svg
-                      className={`w-4 h-4 transform transition-all duration-300 ${
+                      }}
+                      className={`w-full flex justify-between items-center px-4 py-2 rounded transition-all duration-200 ease-in-out hover:scale-[1.02] transform group ${
                         isActive 
-                          ? 'text-white hover:text-white' 
-                          : 'text-gray-800 dark:text-white group-hover:text-primary-400 dark:group-hover:text-primary-400'
-                      } ${(item.to === '/reports' && openReports) || (item.to === '/attendance' && openAttendance) ? 'rotate-180' : ''}`}
-                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                          ? 'text-white bg-primary-600' 
+                          : 'text-gray-900 dark:text-white hover:text-primary-400 dark:hover:text-primary-400'
+                      }`}
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d={(item.to === '/reports' && openReports) || (item.to === '/attendance' && openAttendance) ? "M19 9l-7 7-7-7" : "M9 5l7 7-7 7"} />
-                    </svg>
-                  </button>
-                ) : (
-                  <Link
-                    to={item.to}
-                    onClick={() => setSidebarOpen(false)}
-                    className={`block px-4 py-2 transition-all duration-200 ease-in-out hover:scale-[1.02] transform group ${
-                      isActive 
-                        ? 'text-white' 
-                        : 'text-gray-900 dark:text-white hover:text-primary-400 dark:hover:text-primary-400'
-                    }`}
-                  >
-                    <div className="flex items-center">
-                      {item.icon && (
-                        <div className={`transition-colors duration-200 ${
+                      <div className="flex items-center">
+                        {item.icon && (
+                          <div className={`transition-colors duration-200 ${
+                            isActive 
+                              ? 'text-white hover:text-white' 
+                              : 'text-gray-800 dark:text-white group-hover:text-primary-400 dark:group-hover:text-primary-400'
+                          }`}>
+                            {item.icon}
+                          </div>
+                        )}
+                        {item.label}
+                      </div>
+                      <svg
+                        className={`w-4 h-4 transform transition-all duration-300 ${
                           isActive 
                             ? 'text-white hover:text-white' 
                             : 'text-gray-800 dark:text-white group-hover:text-primary-400 dark:group-hover:text-primary-400'
-                        }`}>
-                          {item.icon}
-                        </div>
-                      )}
-                      {item.label}
-                    </div>
-                  </Link>
-                )}
-              </li>
+                        } ${(item.to === '/reports' && openReports) || (item.to === '/attendance' && openAttendance) ? 'rotate-180' : ''}`}
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d={(item.to === '/reports' && openReports) || (item.to === '/attendance' && openAttendance) ? "M19 9l-7 7-7-7" : "M9 5l7 7-7 7"} />
+                      </svg>
+                    </button>
+                  ) : (
+                    <Link
+                      to={item.to}
+                      onClick={() => setSidebarOpen(false)}
+                      className={`block px-4 py-2 rounded transition-all duration-200 ease-in-out hover:scale-[1.02] transform group ${
+                        isActive 
+                          ? 'text-white bg-primary-600' 
+                          : 'text-gray-900 dark:text-white hover:text-primary-400 dark:hover:text-primary-400'
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        {item.icon && (
+                          <div className={`transition-colors duration-200 ${
+                            isActive 
+                              ? 'text-white hover:text-white' 
+                              : 'text-gray-800 dark:text-white group-hover:text-primary-400 dark:group-hover:text-primary-400'
+                          }`}>
+                            {item.icon}
+                          </div>
+                        )}
+                        {item.label}
+                      </div>
+                    </Link>
+                  )}
+                </li>
 
-              {item.sub && (
-                <div
-                  className={`overflow-hidden transition-all duration-300 ${
-                    (item.to === '/reports' && openReports) || (item.to === '/attendance' && openAttendance) 
-                      ? 'max-h-60 mb-1' 
-                      : 'max-h-0 -mb-1'
-                  }`}
-                >
-                  <ul className="ml-7 space-y-1">
-                    {item.sub.map(sub => {
-                      const isSubActive = activeItem === sub.to;
-                      
-                      return (
-                        <li
-                          key={sub.to}
-                          ref={el => {
-                            if (el) itemRefs.current[sub.to] = el;
-                          }}
-                          className="relative z-10"
-                        >
-                          <Link
-                            to={sub.to}
-                            onClick={() => setSidebarOpen(false)}
-                            className={`block px-4 py-1 transition-all duration-200 ease-in-out hover:scale-[1.02] transform ${
-                              isSubActive 
-                                ? 'text-white hover:text-white' 
-                                : 'text-gray-800 dark:text-gray-300 hover:text-primary-400 dark:hover:text-primary-400'
-                            }`}
-                          >
-                            {sub.label}
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              )}
-            </React.Fragment>
-          );
-        })}
+                {item.sub && (
+                  <div
+                    className={`overflow-hidden transition-all duration-300 ${
+                      (item.to === '/reports' && openReports) || (item.to === '/attendance' && openAttendance) 
+                        ? 'max-h-60 mb-1' 
+                        : 'max-h-0 -mb-1'
+                    }`}
+                  >
+                    <ul className="ml-7 space-y-1">
+                      {item.sub.map(sub => {
+                        const isSubActive = activeItem === sub.to;
+                        
+                        return (
+                          <li key={sub.to} className="relative z-10">
+                            <Link
+                              to={sub.to}
+                              onClick={() => setSidebarOpen(false)}
+                              className={`block px-4 py-1 rounded transition-all duration-200 ease-in-out hover:scale-[1.02] transform ${
+                                isSubActive 
+                                  ? 'text-white bg-primary-600' 
+                                  : 'text-gray-800 dark:text-gray-300 hover:text-primary-400 dark:hover:text-primary-400'
+                              }`}
+                            >
+                              {sub.label}
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })
+        )}
       </ul>
     </aside>
     </>

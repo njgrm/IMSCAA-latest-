@@ -78,42 +78,128 @@ body, body * {
 
 /* Mobile table responsive styles */
 @media (max-width: 640px) {
-  /* Ensure tables maintain minimum width for horizontal scroll */
-  .overflow-x-auto table {
-    min-width: 800px;
+  .responsive-table-frame {
+    overflow-x: visible;
   }
-  
-  /* Improve table cell spacing on mobile */
-  .overflow-x-auto table td,
-  .overflow-x-auto table th {
-    white-space: nowrap;
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
+
+  .responsive-table-cards {
+    display: block;
+    width: 100%;
   }
-  
-  /* Better mobile table scroll indicators */
-  .overflow-x-auto {
-    scrollbar-width: thin;
-    scrollbar-color: #9ca3af #f3f4f6;
+
+  .responsive-table-cards thead {
+    display: none;
   }
-  
-  .dark .overflow-x-auto {
-    scrollbar-color: #6b7280 #374151;
+
+  .responsive-table-cards tbody {
+    display: grid;
+    gap: 0.75rem;
   }
-  
-  /* Mobile table text sizing */
-  .overflow-x-auto table {
-    font-size: 0.75rem;
-    line-height: 1rem;
+
+  .responsive-table-cards tr {
+    display: block;
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    background: #ffffff;
   }
-  
-  /* Truncate long text in mobile tables */
-  .overflow-x-auto table .truncate {
-    max-width: 150px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+
+  .dark .responsive-table-cards tr {
+    border-color: #4b5563;
+    background: #1f2937;
   }
+
+  .responsive-table-cards td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    min-width: 0;
+    padding: 0.5rem 0;
+    white-space: normal;
+    text-align: right;
+  }
+
+  .responsive-table-cards td::before {
+    flex: 0 0 6.5rem;
+    color: #6b7280;
+    content: attr(data-label);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  .dark .responsive-table-cards td::before {
+    color: #9ca3af;
+  }
+
+  .responsive-table-cards td[data-label="Name"],
+  .responsive-table-cards td[data-label="Title"],
+  .responsive-table-cards td[data-label="Student"] {
+    display: block;
+    text-align: left;
+  }
+
+  .responsive-table-cards td[data-label="Name"]::before,
+  .responsive-table-cards td[data-label="Title"]::before,
+  .responsive-table-cards td[data-label="Student"]::before {
+    display: block;
+    margin-bottom: 0.35rem;
+  }
+
+  .responsive-table-cards td[data-label="Name"] > div,
+  .responsive-table-cards td[data-label="Title"] > div,
+  .responsive-table-cards td[data-label="Student"] > div {
+    justify-content: flex-start;
+  }
+
+  .responsive-table-cards td[data-label="Actions"] {
+    display: block;
+    padding-top: 0.75rem;
+    text-align: left;
+  }
+
+  .responsive-table-cards td[data-label="Actions"]::before {
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  .responsive-table-cards td[data-label="Actions"] > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .responsive-table-cards td[data-label="Actions"] button {
+    flex: 1 1 auto;
+    min-height: 2.5rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .responsive-table-cards td[data-label="Actions"] button svg {
+    margin-right: 0.25rem;
+  }
+}
+
+.responsive-table-frame {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-color: #9ca3af #f3f4f6;
+  scrollbar-width: thin;
+}
+
+.responsive-table-cards th {
+  white-space: nowrap;
+}
+
+.dark .responsive-table-frame {
+  scrollbar-color: #6b7280 #374151;
 }
 
 :root {
@@ -132,6 +218,17 @@ body, body * {
 html {
   scroll-behavior: smooth;
 }
+
+html,
+body,
+#root {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+}
 .scroll-section {
   scroll-margin-top: 100px; /* Adjust this for correct positioning */
 }
@@ -146,21 +243,6 @@ section {
 #features {
   scroll-margin-top: 60px; /* Adjust for fixed header */
 }
-/* Hide scrollbar for Chrome, Safari, and Edge */
-::-webkit-scrollbar {
-  display: none;
-}
-
-/* Hide scrollbar for Firefox */
-html {
-  scrollbar-width: none;
-}
-
-/* Hide scrollbar for Internet Explorer & Edge */
-body {
-  -ms-overflow-style: none;
-}
-
 @keyframes dropdown {
   0% { opacity: 0; transform: translateY(-10px) scale(0.95); }
   100% { opacity: 1; transform: translateY(0) scale(1); }
@@ -169,4 +251,3 @@ body {
 .transform-gpu {
   transform: translateZ(0);
 }
-

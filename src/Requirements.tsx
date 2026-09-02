@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect, useRef } from "react";
+import React, { useState, useContext, useEffect, useRef, useMemo } from "react";
 import { ThemeContext } from './theme/ThemeContext';
 import { Button, Modal } from "flowbite-react";
 import Sidebar from './components/Sidebar';
@@ -8,6 +8,7 @@ import Searchbar from "./components/Searchbar";
 import FilterDropdownReq, { Filters } from "./components/FilterDropdownReq";
 import Breadcrumb, { BreadcrumbItem } from './components/Breadcrumb';
 import placeholderImage from "./assets/questionPlaceholder.png"; 
+import profilePlacholder from "./assets/profilePlaceholder.png"; 
 
 type RequirementType = 'event' | 'activity' | 'fee';
 type RequirementStatus = 'scheduled' | 'ongoing' | 'canceled' | 'completed';
@@ -25,6 +26,20 @@ interface Requirement {
   amount_due: number;
   req_picture: string; 
   date_added: string;
+}
+
+interface User {
+  user_id: number;
+  username: string;
+  user_fname: string;
+  user_lname: string;
+  school_id: string;
+  avatar: string;    
+  course: string;
+  year: number;
+  section: string;
+  email?: string;
+  role?: string;
 }
 
 const Requirements: React.FC = () => {
@@ -46,6 +61,18 @@ const Requirements: React.FC = () => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReqId, setCancelReqId] = useState<number | null>(null);
 
+  // New states for user registration
+  const [users, setUsers] = useState<User[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
+  const [userSearch, setUserSearch] = useState("");
+  const [userFilters, setUserFilters] = useState<{course: string; year: string; section: string}>({
+    course: "", year: "", section: ""
+  });
+  
+  // Current user state for role checking
+  const [currentUser, setCurrentUser] = useState<{ user_id: number; role: string } | null>(null);
+  const [isUpdatingStatuses, setIsUpdatingStatuses] = useState(false);
+
   const trail: BreadcrumbItem[] = [
     { label: 'Home', to: '/dashboard' },
     { label: 'Requirements' }
@@ -66,26 +93,46 @@ const Requirements: React.FC = () => {
 
   const [form, setForm] = useState(emptyForm);
 
+  // Function to update event statuses locally based on current time
+  const updateEventStatusesLocally = (events: Requirement[]): Requirement[] => {
+    const now = new Date();
+    return events.map(event => {
+      if (event.requirement_type !== 'event') {
+        return event;
+      }
+      
+      const startTime = new Date(event.start_datetime);
+      const endTime = new Date(event.end_datetime);
+      
+      let newStatus = event.status;
+      
+      if (event.status === 'scheduled' && startTime <= now && endTime > now) {
+        newStatus = 'ongoing';
+      } else if ((event.status === 'scheduled' || event.status === 'ongoing') && endTime < now) {
+        newStatus = 'completed';
+      }
+      
+      return { ...event, status: newStatus as RequirementStatus };
+    });
+  };
+
   const fetchRequirements = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/get_requirement.php", {
+      const res = await fetch("/my-app-server/get_requirement.php", {
         credentials: "include",
       });
   
-      // Handle HTTP errors first
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || 'Server error');
       }
   
       const data = await res.json();
-      
-      // Validate response is array
+
       if (!Array.isArray(data)) {
         throw new Error('Invalid response format');
       }
   
-      // Add data validation/normalization
       const validatedData = data.map(item => ({
         ...item,
         req_picture: item.req_picture || '',
@@ -94,8 +141,10 @@ const Requirements: React.FC = () => {
         requirement_type: item.requirement_type || '',
         end_datetime: item.end_datetime || ''
       }));
+
+      const updatedData = updateEventStatusesLocally(validatedData);
   
-      setRequirements(validatedData);
+      setRequirements(updatedData);
     } catch (e) {
       console.error("Fetch error:", e);
       toast.error(e instanceof Error ? e.message : 'Failed to load requirements');
@@ -103,11 +152,115 @@ const Requirements: React.FC = () => {
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch("/my-app-server/get_user.php", {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to load users");
+      const data = await res.json();
+      setUsers(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error(e);
+      setUsers([]);
+    }
+  };
+
+  const fetchCurrentUser = async () => {
+    try {
+      const res = await fetch("/my-app-server/get_current_user.php", {
+        credentials: "include",
+      });
+      const data = await res.json();
+      setCurrentUser(data);
+    } catch (e) {
+      console.error("Failed to fetch current user");
+    }
+  };
+
+  const updateEventStatuses = async () => {
+    if (isUpdatingStatuses) return;
+
+    if (currentUser?.role?.toLowerCase() !== 'adviser') {
+      toast.error('Only advisers can manually update event statuses');
+      return;
+    }
+    
+    setIsUpdatingStatuses(true);
+    
+    try {
+      setRequirements(prevRequirements => updateEventStatusesLocally(prevRequirements));
+      
+      const response = await fetch('/my-app-server/update_event_statuses.php', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update event statuses on server');
+      }
+      
+      const data = await response.json();
+      
+      if (data.updated_events > 0) {
+        toast.success(`Synced ${data.updated_events} event statuses with server`, { autoClose: 4000 });
+        // Refresh from server to get the authoritative data
+        await fetchRequirements();
+      } else {
+        toast.info('All event statuses are already synchronized', { autoClose: 3000 });
+      }
+      
+    } catch (error: any) {
+      console.error('Event status update failed:', error);
+      toast.error(`Failed to sync event statuses: ${error.message}`, { autoClose: 5000 });
+
+      await fetchRequirements();
+    } finally {
+      setIsUpdatingStatuses(false);
+    }
+  };
+
   useEffect(() => {
     fetchRequirements();
+    fetchUsers();
+    fetchCurrentUser();
+    
+    const statusUpdateInterval = setInterval(() => {
+      setRequirements(prevRequirements => updateEventStatusesLocally(prevRequirements));
+    }, 60000);
+    
+    return () => clearInterval(statusUpdateInterval);
   }, []);
 
-  // Add scroll event listener to show/hide the scroll button
+  useEffect(() => {
+    if (!currentUser?.role) return;
+    
+    const serverSyncInterval = setInterval(async () => {
+      if (currentUser.role.toLowerCase() === 'adviser') {
+        try {
+          const response = await fetch('/my-app-server/update_event_statuses.php', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.updated_events > 0) {
+              console.log(`Auto-synced ${data.updated_events} event statuses with server`);
+              await fetchRequirements();
+            }
+          }
+        } catch (error) {
+          console.log('Auto-sync failed, will retry next interval:', error);
+        }
+      }
+    }, 300000); 
+    
+    return () => clearInterval(serverSyncInterval);
+  }, [currentUser?.role]); 
+
   useEffect(() => {
     const handleScroll = () => {
       if (tableRef.current) {
@@ -120,7 +273,6 @@ const Requirements: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Function to scroll back to top smoothly
   const scrollToTop = () => {
     window.scrollTo({
       top: 0,
@@ -153,37 +305,50 @@ const Requirements: React.FC = () => {
     if (!form.start_datetime) return toast.error("Start date is required!");
     if (!form.end_datetime) return toast.error("End date is required!");
 
+    // For events and activities, check if users are selected
+    if ((form.requirement_type === 'event' || form.requirement_type === 'activity') && selectedUsers.length === 0) {
+      return toast.error("Please select at least one user for this event/activity!");
+    }
+
     try {
-        const res = await fetch("http://localhost/my-app-server/add_requirement.php", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...form,
-            req_picture: form.req_picture || null
-          })
-        });
+      const endpoint = (form.requirement_type === 'event' || form.requirement_type === 'activity')
+        ? "/my-app-server/add_requirement_with_registrations.php"
+        : "/my-app-server/add_requirement.php";
+
+      const bodyData = {
+        ...form,
+        req_picture: form.req_picture || null,
+        ...(selectedUsers.length > 0 && { selected_users: selectedUsers })
+      };
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bodyData)
+      });
 
       const data = await res.json();
       if (res.ok) {
-        toast.success("Requirement added successfully!");
+        toast.success(`Requirement added successfully! ${data.registered_users ? `Registered ${data.registered_users} users.` : ''}`);
         setIsAddOpen(false);
         setForm(emptyForm);
+        setSelectedUsers([]);
         await fetchRequirements();
       } else {
         toast.error(`Add failed: ${data.error}`);
       }
     } catch (err: any) {
-        toast.error(err.message || 'Failed to add requirement');
-      }
-    };
+      toast.error(err.message || 'Failed to add requirement');
+    }
+  };
 
   const saveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editId) return;
 
     try {
-      const res = await fetch("http://localhost/my-app-server/update_requirement.php", {
+      const res = await fetch("/my-app-server/update_requirement.php", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -208,13 +373,13 @@ const Requirements: React.FC = () => {
   const deleteRequirement = async () => {
     if (!requirementToDelete) return;
     try {
-      const resRole = await fetch("http://localhost/my-app-server/get_current_user.php", { credentials: "include" });
+      const resRole = await fetch("/my-app-server/get_current_user.php", { credentials: "include" });
       const user = await resRole.json();
       const role = user.role ? user.role.toLowerCase() : null;
       if (role === 'adviser') {
         // Adviser: delete directly
         const res = await fetch(
-          `http://localhost/my-app-server/delete_requirement.php?requirement_id=${requirementToDelete}`,
+          `/my-app-server/delete_requirement.php?requirement_id=${requirementToDelete}`,
           { method: "DELETE", credentials: "include" }
         );
         if (res.ok) {
@@ -227,7 +392,7 @@ const Requirements: React.FC = () => {
       } else {
         // President/Officer: request deletion
         const reasonToSend = deleteReason.trim() || "Request to delete requirement.";
-        const res = await fetch("http://localhost/my-app-server/add_deletion_request.php", {
+        const res = await fetch("/my-app-server/add_deletion_request.php", {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
@@ -308,7 +473,7 @@ const Requirements: React.FC = () => {
 
   const fetchMyDeletionRequests = async () => {
     try {
-      const res = await fetch("http://localhost/my-app-server/get_deletion_requests.php", { credentials: "include" });
+      const res = await fetch("/my-app-server/get_deletion_requests.php", { credentials: "include" });
       const data = await res.json();
       setMyDeletionRequests(Array.isArray(data) ? data : []);
     } catch (e) {
@@ -322,7 +487,7 @@ const Requirements: React.FC = () => {
 
   const cancelDeletionRequest = async (requestId: number) => {
     try {
-      const res = await fetch("http://localhost/my-app-server/cancel_deletion_request.php", {
+      const res = await fetch("/my-app-server/cancel_deletion_request.php", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -355,12 +520,56 @@ const Requirements: React.FC = () => {
     return () => window.removeEventListener('deletion-request-status', handler);
   }, []);
 
+  // User selection functions
+  const handleUserCheckbox = (userId: number) => {
+    setSelectedUsers(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId) 
+        : [...prev, userId]
+    );
+  };
+
+  const handleSelectAllUsers = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedUsers(filteredUsers.map(u => u.user_id));
+    } else {
+      setSelectedUsers([]);
+    }
+  };
+
+  // Filtered users for the modal
+  const filteredUsers = users.filter(u => {
+    const name = `${u.user_fname} ${u.user_lname}`.toLowerCase();
+    if (userSearch && !name.includes(userSearch.toLowerCase())) return false;
+    if (userFilters.course && u.course !== userFilters.course) return false;
+    if (userFilters.year && String(u.year) !== userFilters.year) return false;
+    if (userFilters.section && u.section !== userFilters.section) return false;
+    return true;
+  });
+
+  // Get unique values for filters
+  const courses = useMemo(() => [...new Set(users.map(u => u.course))], [users]);
+  const years = useMemo(() => [...new Set(users.map(u => String(u.year)))], [users]);
+  const sections = useMemo(() => [...new Set(users.map(u => u.section))], [users]);
+
+  // Reset user selection when modal closes
+  useEffect(() => {
+    if (!isAddOpen) {
+      setSelectedUsers([]);
+      setUserSearch("");
+      setUserFilters({ course: "", year: "", section: "" });
+    } else if (isAddOpen && (form.requirement_type === 'event' || form.requirement_type === 'activity')) {
+      // Auto-select all users when opening modal for events/activities
+      setSelectedUsers(users.map(u => u.user_id));
+    }
+  }, [isAddOpen, form.requirement_type, users]);
+
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 py-14">
+    <div className="flex min-h-screen min-w-0 w-full bg-gray-50 dark:bg-gray-900 py-14">
       <Sidebar
       />
 
-      <div className="flex-1 sm:ml-64 relative flex flex-col">
+      <div className="flex min-w-0 flex-1 sm:ml-64 relative flex-col">
         <div className="p-3 sm:px-5 sm:pt-5 sm:pb-1">
           <Breadcrumb items={trail} />
           <div className="flex flex-col sm:flex-row sm:items-center justify-between dark:border-gray-700 pt-0 mb-0 gap-4 sm:gap-0">
@@ -383,6 +592,33 @@ const Requirements: React.FC = () => {
                 <span className="hidden sm:inline">+ Add Requirement</span>
                 <span className="sm:hidden">+ Add</span>
               </Button>
+              
+              {/* Manual Sync Button - Only for advisers (Auto-sync runs every 5 minutes) */}
+              {currentUser?.role?.toLowerCase() === 'adviser' && (
+                <Button
+                  onClick={updateEventStatuses}
+                  disabled={isUpdatingStatuses}
+                  className="bg-secondary-600 hover:bg-secondary-500 disabled:bg-gray-400 text-white text-xs sm:text-sm px-3 sm:px-4 py-1 flex items-center"
+                  title="Manual sync with server (Auto-sync runs every 5 minutes)"
+                >
+                  {isUpdatingStatuses ? (
+                    <>
+                      <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-white mr-1 sm:mr-2"></div>
+                      <span className="hidden sm:inline">Syncing...</span>
+                      <span className="sm:hidden">...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                      </svg>
+                      <span className="hidden sm:inline">Manual Sync</span>
+                      <span className="sm:hidden">Sync</span>
+                    </>
+                  )}
+                </Button>
+              )}
+              
               <FilterDropdownReq
                 isOpen={showFilter}
                 toggle={() => setShowFilter(!showFilter)}
@@ -395,9 +631,9 @@ const Requirements: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
-          <div ref={tableRef} className="overflow-x-auto shadow-md relative z-10">
-            <table className="min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow dark:text-white">
+        <div className="min-w-0 flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
+          <div ref={tableRef} className="responsive-table-frame shadow-md relative z-10">
+            <table className="responsive-table-cards min-w-0 sm:min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow dark:text-white">
             <thead className="bg-gray-100 dark:bg-gray-700">
                 <tr>
                     {['Title', 'Type', 'Status', 'Start Date', 'End Date', 'Location', 'Amount', 'Actions'].map((col) => (
@@ -410,7 +646,7 @@ const Requirements: React.FC = () => {
                 <tbody>
                 {filteredRequirements.map(r => (
                     <tr key={r.requirement_id} className="border-b dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
-                    <td className="px-4 py-3 flex items-center">
+                    <td data-label="Title" className="px-4 py-3 flex items-center">
                         <img
                         src={r.req_picture || placeholderImage}
                         alt="Requirement"
@@ -423,7 +659,7 @@ const Requirements: React.FC = () => {
                         {r.title}
                         </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td data-label="Type" className="px-4 py-3">
                         <span className={`capitalize px-2 py-1 rounded ${
                         r.requirement_type === 'event' ? 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100' :
                         r.requirement_type === 'activity' ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' :
@@ -432,30 +668,40 @@ const Requirements: React.FC = () => {
                         {r.requirement_type}
                         </span>
                     </td>
-                    <td className="px-4 py-3">
-                        <span className={`capitalize px-2 py-1 rounded ${
-                        r.status === 'scheduled' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100' :
-                        r.status === 'ongoing' ? 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100' :
-                        r.status === 'canceled' ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100' :
-                        'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
-                        }`}>
-                        {r.status}
-                        </span>
+                    <td data-label="Status" className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          <span className={`capitalize px-2 py-1 rounded ${
+                          r.status === 'scheduled' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100' :
+                          r.status === 'ongoing' ? 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100' :
+                          r.status === 'canceled' ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100' :
+                          'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
+                          }`}>
+                          {r.status}
+                          </span>
+                          {/* Auto-update indicator for events */}
+                          {r.requirement_type === 'event' && (
+                            <div className="text-xs text-gray-400 dark:text-gray-500" title="Auto-updated based on time">
+                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"/>
+                              </svg>
+                            </div>
+                          )}
+                        </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
+                    <td data-label="Start Date" className="px-4 py-3 text-gray-600 dark:text-gray-300">
                         {new Date(r.start_datetime).toLocaleDateString()}
                     </td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
+                    <td data-label="End Date" className="px-4 py-3 text-gray-600 dark:text-gray-300">
                         {new Date(r.end_datetime).toLocaleDateString()}
                     </td>
-                    <td className="px-4 py-3 text-gray-800 dark:text-gray-100">{r.location}</td>
-                    <td className="px-4 py-3 text-gray-800 dark:text-gray-100">
+                    <td data-label="Location" className="px-4 py-3 text-gray-800 dark:text-gray-100">{r.location}</td>
+                    <td data-label="Amount" className="px-4 py-3 text-gray-800 dark:text-gray-100">
                         {r.requirement_type === 'fee' ? 
                         `₱${Number(r.amount_due).toFixed(2)}` :  
                         '-'
                         }
                     </td>
-                    <td className="px-4 py-3  ">
+                    <td data-label="Actions" className="px-4 py-3  ">
                         <div className="flex items-center space-x-2 ">
                             <button
                             onClick={() => openEdit(r)}
@@ -493,6 +739,19 @@ const Requirements: React.FC = () => {
                                   <path fillRule="evenodd" clipRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" />
                                 </svg>
                                 Cancel
+                              </button>
+                            ) : currentUser?.role?.toLowerCase() === 'adviser' ? (
+                              <button
+                                onClick={() => {
+                                  setRequirementToDelete(r.requirement_id);
+                                  setIsDeleteModalOpen(true);
+                                }}
+                                className="px-6 py-2 text-sm font-medium border border-red-500 text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900 whitespace-nowrap transition-transform duration-200 ease-in-out transform hover:scale-105 flex items-center justify-center"
+                              >
+                                <svg aria-hidden="true" className="w-5 h-5 mr-1.5 -ml-1" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" clipRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" />
+                                </svg>
+                                Delete
                               </button>
                             ) : (
                               <button
@@ -532,180 +791,443 @@ const Requirements: React.FC = () => {
       </div>
 
       {/* Add Modal */}
-    <Modal
+      <Modal
         show={isAddOpen}
         onClose={() => {
           setIsAddOpen(false)
           setForm(emptyForm)  
         }}
+        size={(form.requirement_type === 'event' || form.requirement_type === 'activity') ? "7xl" : "xl"}
       >
         <Modal.Header className="dark:bg-gray-800 rounded">Add New Requirement</Modal.Header>
         <Modal.Body className="dark:bg-gray-800 dark:text-white py-2 pb-8 rounded">
-          <form onSubmit={addRequirement} className="grid grid-cols-1 gap-4">
-            <div>
-              <label className="block mb-1 text-sm">Title</label>
-              <input
-                type="text"
-                name="title"
-                value={form.title}
-                onChange={handleFormChange}
-                required
-                 className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
-              />
-            </div>
+          {(form.requirement_type === 'event' || form.requirement_type === 'activity') ? (
+            // Large modal with user selection
+            <div className="mx-auto max-w-[95vw] py-4">
+              <div className="grid grid-cols-[2fr_3fr] gap-x-6 gap-y-2 dark:text-white">
+                
+                {/* Left: Requirement Details */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold">Requirement Details</h3>
+                  <form onSubmit={addRequirement} className="space-y-4">
+                    <div>
+                      <label className="block mb-1 text-sm">Title</label>
+                      <input
+                        type="text"
+                        name="title"
+                        value={form.title}
+                        onChange={handleFormChange}
+                        required
+                        className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                      />
+                    </div>
 
-            <div>
-              <label className="block mb-1 text-sm">Description</label>
-              <textarea
-                name="description"
-                value={form.description}
-                onChange={handleFormChange}
-                required
-                 className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
-              />
-            </div>
+                    <div>
+                      <label className="block mb-1 text-sm">Description</label>
+                      <textarea
+                        name="description"
+                        value={form.description}
+                        onChange={handleFormChange}
+                        required
+                        rows={3}
+                        className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                      />
+                    </div>
 
-            <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block mb-1 text-sm">Start Date</label>
+                        <input
+                          type="date"
+                          name="start_datetime"
+                          value={form.start_datetime}
+                          onChange={handleFormChange}
+                          required
+                          className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="block mb-1 text-sm">End Date</label>
+                        <input
+                          type="date"
+                          name="end_datetime"
+                          value={form.end_datetime}
+                          onChange={handleFormChange}
+                          required
+                          className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block mb-1 text-sm">Location</label>
+                      <input
+                        type="text"
+                        name="location"
+                        value={form.location}
+                        onChange={handleFormChange}
+                        className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block mb-1 text-sm">Type</label>
+                        <select
+                          name="requirement_type"
+                          value={form.requirement_type}
+                          onChange={handleFormChange}
+                          className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                        >
+                          <option value="event">Event</option>
+                          <option value="activity">Activity</option>
+                          <option value="fee">Fee</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block mb-1 text-sm">Status</label>
+                        <select
+                          name="status"
+                          value={form.status}
+                          onChange={handleFormChange}
+                          className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                        >
+                          <option value="scheduled">Scheduled</option>
+                          <option value="ongoing">Ongoing</option>
+                          <option value="canceled">Canceled</option>
+                          <option value="completed">Completed</option>
+                        </select>
+                      </div>
+                    </div>
+                
+
+                    <div className="mb-0 mt-4">
+                      <span className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                        Requirement Image
+                      </span>
+                      <div className="flex justify-center items-center w-full">
+                        <label 
+                          htmlFor="dropzone-file-main"
+                          className="flex flex-col justify-center items-center w-full h-32 bg-gray-50 rounded-lg border-2 border-gray-300 border-dashed cursor-pointer dark:hover:bg-bray-800 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500 dark:hover:bg-gray-600 relative"
+                        >
+                          {form.req_picture ? (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <img 
+                                src={form.req_picture} 
+                                alt="Preview" 
+                                className="max-h-full max-w-full object-contain p-2 rounded-lg"
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex flex-col justify-center items-center pt-2 pb-2">
+                              <svg 
+                                aria-hidden="true" 
+                                className="mb-1 w-6 h-6 text-gray-400" 
+                                fill="none" 
+                                stroke="currentColor" 
+                                viewBox="0 0 24 24" 
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path 
+                                  strokeLinecap="round" 
+                                  strokeLinejoin="round" 
+                                  strokeWidth="2" 
+                                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" 
+                                />
+                              </svg>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                <span className="font-semibold">Click to upload</span>
+                              </p>
+                            </div>
+                          )}
+                          <input 
+                            id="dropzone-file-main" 
+                            type="file" 
+                            className="hidden"
+                            accept="image/*"
+                            name="req_picture"
+                            onChange={handleFormChange}
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="mt-6">
+                      <Button type="submit" className="w-full bg-primary-600 hover:bg-primary-400">
+                        Create Requirement
+                      </Button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Right: User Selection */}
+                <div className="flex flex-col bg-white dark:bg-gray-900 rounded-lg overflow-hidden max-h-[71vh] py-2 space-y-2">
+                  {/* Header with search and filters */}
+                  <div className="px-4 py-0 flex flex-wrap items-center gap-2 border-b border-gray-200 dark:border-gray-700">
+                    <Searchbar
+                      search={userSearch}
+                      onSearchChange={setUserSearch}
+                    />
+                    <select
+                      className="px-3 py-2 mb-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                      value={userFilters.course}
+                      onChange={e => setUserFilters(prev => ({ ...prev, course: e.target.value }))}
+                    >
+                      <option value="">All Courses</option>
+                      {courses.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                    <select
+                      className="px-3 py-2 mb-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                      value={userFilters.year}
+                      onChange={e => setUserFilters(prev => ({ ...prev, year: e.target.value }))}
+                    >
+                     <option value="">All Years</option>
+                {[...years]
+                .sort((a, b) => Number(a) - Number(b))
+                .map(y => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+                    </select>
+                    <select
+                      className="px-3 py-2 mb-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                      value={userFilters.section}
+                      onChange={e => setUserFilters(prev => ({ ...prev, section: e.target.value }))}
+                      >
+                      <option value="">All Sections</option>
+                      {[...sections]
+                        .sort((a, b) => a.localeCompare(b))
+                        .map(s => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <h3 className="px-5 py-2 font-semibold">Select Users ({selectedUsers.length} selected)</h3>
+
+                  {/* Scrollable user list */}
+                  <div className="flex-1 overflow-auto">
+                    <table className="min-w-full bg-white dark:bg-gray-900 dark:text-white">
+                      <thead className="bg-gray-100 dark:bg-gray-700">
+                        <tr>
+                          <th className="px-2">
+                            <input
+                              type="checkbox"
+                              onChange={handleSelectAllUsers}
+                              checked={selectedUsers.length === filteredUsers.length && filteredUsers.length > 0}
+                              className="w-4 h-4 mr-0 ml-1 bg-gray-100 border-gray-300 rounded text-primary-600 focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-700 focus:ring-2 dark:bg-gray-600 dark:border-gray-500"
+                            />
+                          </th>
+                          <th className="px-2 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">Name</th>
+                          <th className="px-2 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">Course</th>
+                          <th className="px-1 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">Year</th>
+                          <th className="px-1 py-2 text-left text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">Section</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {filteredUsers.map(u => (
+                          <tr
+                            key={u.user_id}
+                            onClick={() => handleUserCheckbox(u.user_id)}
+                            className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
+                          >
+                            <td className="px-2 py-1 pl-5">
+                              <input
+                                type="checkbox"
+                                checked={selectedUsers.includes(u.user_id)}
+                                onChange={() => handleUserCheckbox(u.user_id)}
+                                onClick={e => e.stopPropagation()}
+                                className="w-4 h-4 bg-gray-100 border-gray-300 rounded text-primary-600 focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-700 focus:ring-2 dark:bg-gray-600 dark:border-gray-500"
+                              />
+                            </td>
+                            <td className="px-2 py-3 flex items-center space-x-2">
+                              <img
+                                src={u.avatar || profilePlacholder}
+                                alt=""
+                                className="w-6 h-6 rounded-full"
+                              />
+                              <span>{u.user_fname} {u.user_lname}</span>
+                            </td>
+                            <td className="px-2 py-2">{u.course}</td>
+                            <td className="px-2 py-2">{u.year}</td>
+                            <td className="px-2 py-2">{u.section}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            // Original simple modal for fees
+            <form onSubmit={addRequirement} className="grid grid-cols-1 gap-4">
+              <div>
+                <label className="block mb-1 text-sm">Title</label>
+                <input
+                  type="text"
+                  name="title"
+                  value={form.title}
+                  onChange={handleFormChange}
+                  required
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                />
+              </div>
+
+              <div>
+                <label className="block mb-1 text-sm">Description</label>
+                <textarea
+                  name="description"
+                  value={form.description}
+                  onChange={handleFormChange}
+                  required
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <label className="block mb-1 text-sm">Start Date</label>
-                    <input
+                  <label className="block mb-1 text-sm">Start Date</label>
+                  <input
                     type="date"
                     name="start_datetime"
                     value={form.start_datetime}
                     onChange={handleFormChange}
                     required
-                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
-                    />
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                  />
                 </div>
                 <div>
-                    <label className="block mb-1 text-sm">End Date</label>
-                    <input
+                  <label className="block mb-1 text-sm">End Date</label>
+                  <input
                     type="date"
                     name="end_datetime"
                     value={form.end_datetime}
                     onChange={handleFormChange}
                     required
-                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
-                    />
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                  />
                 </div>
-                </div>
-
-            <div>
-              <label className="block mb-1 text-sm">Location</label>
-              <input
-                type="text"
-                name="location"
-                value={form.location}
-                onChange={handleFormChange}
-                 className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block mb-1 text-sm">Type</label>
-                <select
-                  name="requirement_type"
-                  value={form.requirement_type}
-                  onChange={handleFormChange}
-                   className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
-                >
-                  <option value="event">Event</option>
-                  <option value="activity">Activity</option>
-                  <option value="fee">Fee</option>
-                </select>
               </div>
-              <div>
-                <label className="block mb-1 text-sm">Status</label>
-                <select
-                  name="status"
-                  value={form.status}
-                  onChange={handleFormChange}
-                   className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
-                >
-                  <option value="scheduled">Scheduled</option>
-                  <option value="ongoing">Ongoing</option>
-                  <option value="canceled">Canceled</option>
-                  <option value="completed">Completed</option>
-                </select>
-              </div>
-            </div>
 
-            {form.requirement_type === 'fee' && (
               <div>
-                <label className="block mb-1 text-sm">Amount Due</label>
+                <label className="block mb-1 text-sm">Location</label>
                 <input
-                  type="number"
-                  step="0.01"
-                  name="amount_due"
-                  value={form.amount_due}
+                  type="text"
+                  name="location"
+                  value={form.location}
                   onChange={handleFormChange}
-                   className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
                 />
               </div>
-            )}
 
-                <div className="mb-0 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block mb-1 text-sm">Type</label>
+                  <select
+                    name="requirement_type"
+                    value={form.requirement_type}
+                    onChange={handleFormChange}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                  >
+                    <option value="event">Event</option>
+                    <option value="activity">Activity</option>
+                    <option value="fee">Fee</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm">Status</label>
+                  <select
+                    name="status"
+                    value={form.status}
+                    onChange={handleFormChange}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                  >
+                    <option value="scheduled">Scheduled</option>
+                    <option value="ongoing">Ongoing</option>
+                    <option value="canceled">Canceled</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+              </div>
+
+              {form.requirement_type === 'fee' && (
+                <div>
+                  <label className="block mb-1 text-sm">Amount Due</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    name="amount_due"
+                    value={form.amount_due}
+                    onChange={handleFormChange}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                  />
+                </div>
+              )}
+
+              <div className="mb-0 mt-4">
                 <span className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
-                    Requirement Image
+                  Requirement Image
                 </span>
                 <div className="flex justify-center items-center w-full">
-                    <label 
-                    htmlFor="dropzone-file"
-                    className="flex flex-col justify-center items-center w-full h-48 bg-gray-50 rounded-lg border-2 border-gray-300 border-dashed cursor-pointer dark:hover:bg-bray-800 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500 dark:hover:bg-gray-600 relative"
-                    >
+                  <label 
+                    htmlFor="dropzone-file-main"
+                    className="flex flex-col justify-center items-center w-full h-32 bg-gray-50 rounded-lg border-2 border-gray-300 border-dashed cursor-pointer dark:hover:bg-bray-800 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500 dark:hover:bg-gray-600 relative"
+                  >
                     {form.req_picture ? (
-                        <div className="w-full h-full flex items-center justify-center">
+                      <div className="w-full h-full flex items-center justify-center">
                         <img 
-                            src={form.req_picture} 
-                            alt="Preview" 
-                            className="max-h-full max-w-full object-contain p-2 rounded-lg"
+                          src={form.req_picture} 
+                          alt="Preview" 
+                          className="max-h-full max-w-full object-contain p-2 rounded-lg"
                         />
-                        </div>
+                      </div>
                     ) : (
-                        <div className="flex flex-col justify-center items-center pt-5 pb-6">
+                      <div className="flex flex-col justify-center items-center pt-2 pb-2">
                         <svg 
-                            aria-hidden="true" 
-                            className="mb-3 w-10 h-10 text-gray-400" 
-                            fill="none" 
-                            stroke="currentColor" 
-                            viewBox="0 0 24 24" 
-                            xmlns="http://www.w3.org/2000/svg"
+                          aria-hidden="true" 
+                          className="mb-1 w-6 h-6 text-gray-400" 
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24" 
+                          xmlns="http://www.w3.org/2000/svg"
                         >
-                            <path 
+                          <path 
                             strokeLinecap="round" 
                             strokeLinejoin="round" 
                             strokeWidth="2" 
                             d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" 
-                            />
+                          />
                         </svg>
-                        <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
-                            <span className="font-semibold">Click to upload</span>
-                            
-                        </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                            SVG, PNG, or JPG (MAX. 800x400px)
+                          <span className="font-semibold">Click to upload</span>
                         </p>
-                        </div>
+                      </div>
                     )}
                     <input 
-                        id="dropzone-file" 
-                        type="file" 
-                        className="hidden"
-                        accept="image/*"
-                        name="req_picture"
-                        onChange={handleFormChange}
+                      id="dropzone-file-main" 
+                      type="file" 
+                      className="hidden"
+                      accept="image/*"
+                      name="req_picture"
+                      onChange={handleFormChange}
                     />
-                    </label>
+                  </label>
                 </div>
-                </div>
+              </div>
 
-            <div className="mt-0">
-              <Button type="submit" className="w-50 bg-primary-600 hover:bg-primary-400 ">
-                Create Requirement
-              </Button>
-            </div>
-          </form>
+              <div className="mt-6">
+                <Button type="submit" className="w-full bg-primary-600 hover:bg-primary-400">
+                  Create Requirement
+                </Button>
+              </div>
+            </form>
+          )}
         </Modal.Body>
       </Modal>
 
@@ -883,94 +1405,90 @@ const Requirements: React.FC = () => {
 
     {/* Delete Requirement Modal */}
 <Modal show={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}>
-  <Modal.Header className="dark:bg-gray-800">Request Requirement Deletion</Modal.Header>
-  <Modal.Body className="dark:bg-gray-800 dark:text-white rounded">
+  <Modal.Body className="p-4 text-center bg-white dark:bg-gray-800 rounded-lg shadow sm:p-5">
+    <button
+      onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}
+      className="absolute top-2.5 right-2.5 text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white"
+    >
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+      </svg>
+      <span className="sr-only">Close modal</span>
+    </button>
+
+    <svg className="text-gray-400 dark:text-gray-500 w-11 h-11 mb-3.5 mx-auto" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"></path>
+    </svg>
+
     {requirementToDelete && (() => {
       const r = requirements.find(x => x.requirement_id === requirementToDelete);
       if (!r) return null;
+      
       return (
-        <form className="space-y-6 overflow-y-auto max-h-[80vh]">
-          <div className="rounded-lg shadow bg-white dark:bg-gray-900 p-5 flex flex-col md:flex-row gap-6 items-center border border-gray-200 dark:border-gray-700">
-            <img src={r.req_picture || placeholderImage} alt="Requirement" className="w-32 h-32 rounded object-cover border border-gray-300 dark:border-gray-700" />
-            <div className="flex-1 space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xl font-bold text-gray-900 dark:text-white">{r.title}</span>
-                <span className={`capitalize px-2 py-1 rounded text-xs font-semibold ml-2 ${
-                  r.requirement_type === 'event' ? 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100' :
-                  r.requirement_type === 'activity' ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' :
-                  'bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-100'
-                }`}>{r.requirement_type}</span>
-                <span className={`capitalize px-2 py-1 rounded text-xs font-semibold ml-2 ${
-                  r.status === 'scheduled' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100' :
-                  r.status === 'ongoing' ? 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100' :
-                  r.status === 'canceled' ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100' :
-                  'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
-                }`}>{r.status}</span>
+        <>
+          {/* Dynamic content based on user role */}
+          {currentUser?.role?.toLowerCase() === 'adviser' ? (
+            <>
+              <p className="mb-4 text-gray-500 dark:text-gray-300">
+                Are you sure you want to delete "{r.title}"?
+              </p>
+              <p className="mb-4 text-sm text-gray-400 dark:text-gray-400">
+                This will permanently remove the requirement and all associated data. This action cannot be undone.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="mb-4 text-gray-500 dark:text-gray-300">
+                Request deletion of "{r.title}"?
+              </p>
+              <p className="mb-4 text-sm text-gray-400 dark:text-gray-400">
+                This will send a deletion request to an adviser for approval.
+              </p>
+              
+              {/* Reason field for requests */}
+              <div className="mb-4 text-left">
+                <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Reason (optional)
+                </label>
+                <textarea
+                  className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400 text-gray-900 dark:text-white"
+                  value={deleteReason}
+                  onChange={e => setDeleteReason(e.target.value)}
+                  placeholder="e.g. No longer needed, duplicate, etc."
+                  rows={3}
+                />
               </div>
-              <div className="flex flex-wrap gap-4 mt-2">
-                <div className="flex items-center gap-1 text-gray-700 dark:text-gray-300">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 12.414a4 4 0 10-1.414 1.414l4.243 4.243a1 1 0 001.414-1.414z" /></svg>
-                  <span>{r.location || 'No location'}</span>
-                </div>
-                <div className="flex items-center gap-1 text-gray-700 dark:text-gray-300">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                  <span>{new Date(r.start_datetime).toLocaleDateString()} - {new Date(r.end_datetime).toLocaleDateString()}</span>
-                </div>
-                {r.requirement_type === 'fee' && (
-                  <div className="flex items-center gap-1 text-gray-700 dark:text-gray-300">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 0V4m0 7v7" /></svg>
-                    <span>₱{Number(r.amount_due).toFixed(2)}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="bg-yellow-50 dark:bg-yellow-900/30 p-3 rounded-lg border border-yellow-200 dark:border-yellow-700 mb-4">
-                  <div className="flex items-center text-yellow-800 dark:text-yellow-200">
-                    <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path>
-                    </svg>
-                    <span className="font-medium">Note:</span>
-                  </div>
-                  <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                    Deletion will remove all the transactions tied to this specific requirement. This action cannot be undone once approved by the adviser.
-                  </p>
-                </div>
+            </>
+          )}
 
-          {/* Reason */}
-          <div>
-            <label className="block mb-1 text-sm">Reason for deletion (optional)</label>
-            <textarea
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
-              value={deleteReason}
-              onChange={e => setDeleteReason(e.target.value)}
-              placeholder="e.g. No longer needed, duplicate, etc."
-              rows={3}
-            />
+          <div className="flex justify-center items-center space-x-4">
+            <button
+              onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}
+              className="py-2 px-3 text-sm font-medium text-gray-500 bg-white rounded-lg border border-gray-200 hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-primary-300 hover:text-gray-900 focus:z-10 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-500 dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-600"
+            >
+              No, cancel
+            </button>
+            <button
+              onClick={async () => {
+                if (!requirementToDelete) return;
+                try {
+                  await deleteRequirement();
+                  await fetchMyDeletionRequests();
+                  await fetchRequirements();
+                } catch (err: any) {
+                  toast.error(err.message);
+                } finally {
+                  setIsDeleteModalOpen(false);
+                  setRequirementToDelete(null);
+                  setDeleteReason("");
+                }
+              }}
+              className="py-2 px-3 text-sm font-medium text-center text-white bg-red-600 rounded-lg hover:bg-red-700 focus:ring-4 focus:outline-none focus:ring-red-300 dark:bg-red-500 dark:hover:bg-red-600 dark:focus:ring-red-900"
+            >
+              {currentUser?.role?.toLowerCase() === 'adviser' ? "Yes, I'm sure" : "Yes, request deletion"}
+            </button>
           </div>
-          {/* Buttons */}
-          <div className="flex justify-start space-x-2 mt-4">
-            <Button type="button" color="failure" onClick={async () => {
-              if (!requirementToDelete) return;
-              try {
-                await deleteRequirement();
-                await fetchMyDeletionRequests();
-                await fetchRequirements();
-              } catch (err: any) {
-                toast.error(err.message);
-              } finally {
-                setIsDeleteModalOpen(false);
-                setRequirementToDelete(null);
-                setDeleteReason("");
-              }
-            }} className="px-8 bg-red-600 hover:bg-red-700 text-white">
-              Request Deletion
-            </Button>
-            <Button type="button" color="gray" onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }} className="border border-gray-300 dark:border-gray-600">
-              Cancel
-            </Button>
-          </div>
-        </form>
+        </>
       );
     })()}
   </Modal.Body>

@@ -1,7 +1,7 @@
 <?php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
-header("Access-Control-Allow-Origin: http://localhost:5173");
+require_once __DIR__ . '/cors.php';
 header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
@@ -12,23 +12,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    echo json_encode(['error' => 'Only POST allowed']);
-    exit;
-}
-
 session_start();
-if (empty($_SESSION['user_id']) || empty($_SESSION['club_id']) || strtolower($_SESSION['role']) !== 'adviser') {
-    http_response_code(403);
-    echo json_encode(['error' => 'Only adviser can approve']);
+if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Not authenticated']);
     exit;
 }
 
+$club_id = $_SESSION['club_id'];
 $input = json_decode(file_get_contents('php://input'), true);
-$request_ids = $input['request_ids'] ?? null;
 $request_id = isset($input['request_id']) ? (int)$input['request_id'] : 0;
+$request_ids = isset($input['request_ids']) ? $input['request_ids'] : null;
 
+// Mass approval logic
 if ($request_ids && is_array($request_ids)) {
     $results = [];
     foreach ($request_ids as $rid) {
@@ -37,7 +33,7 @@ if ($request_ids && is_array($request_ids)) {
         try {
             $pdo = new PDO("mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4", "root", "", [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
             $pdo->beginTransaction();
-            $stmt = $pdo->prepare("SELECT * FROM deletion_requests WHERE request_id = ? FOR UPDATE");
+            $stmt = $pdo->prepare("SELECT * FROM approval_requests WHERE request_id = ? FOR UPDATE");
             $stmt->execute([$rid]);
             $req = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$req || $req['status'] !== 'pending') {
@@ -48,47 +44,106 @@ if ($request_ids && is_array($request_ids)) {
             $type = $req['type'];
             $target_id = (int)$req['target_id'];
             $club_id = (int)$req['club_id'];
-            if ($type === 'user') {
-                // Cascade delete all transactions for this user in the club
-                $delTx = $pdo->prepare("
-                    DELETE t
-                      FROM transactions t
-                      JOIN requirements r ON t.requirement_id = r.requirement_id
-                     WHERE t.user_id = ?
-                       AND r.club_id = ?
-                ");
-                $delTx->execute([$target_id, $club_id]);
-                // Now delete the user
-                $del = $pdo->prepare("DELETE FROM users WHERE user_id = ? AND club_id = ?");
-                $del->execute([$target_id, $club_id]);
-            } else if ($type === 'requirement') {
-                // Cascade delete all transactions for this requirement in the club
-                $delTx = $pdo->prepare("
-                    DELETE t
-                      FROM transactions t
-                      JOIN requirements r ON t.requirement_id = r.requirement_id
-                     WHERE t.requirement_id = ?
-                       AND r.club_id = ?
-                ");
-                $delTx->execute([$target_id, $club_id]);
-                // Now delete the requirement
-                $del = $pdo->prepare("DELETE FROM requirements WHERE requirement_id = ? AND club_id = ?");
-                $del->execute([$target_id, $club_id]);
-            } else if ($type === 'club') {
-                $del = $pdo->prepare("DELETE FROM club WHERE club_id = ?");
-                $del->execute([$club_id]);
-            } else if ($type === 'transaction') {
-                // Only delete if the transaction belongs to a requirement in this club
-                $del = $pdo->prepare("
-                    DELETE t
-                      FROM transactions t
-                      JOIN requirements r ON t.requirement_id = r.requirement_id
-                     WHERE t.transaction_id = ?
-                       AND r.club_id = ?
-                ");
-                $del->execute([$target_id, $club_id]);
+            $approval_type = $req['approval_type'] ?? 'delete'; // Use approval_type instead of request_type
+            
+            // Handle different request types
+            if ($approval_type === 'delete') {
+                // Handle deletion requests
+                if ($type === 'user') {
+                    // Cascade delete all transactions for this user in the club
+                    $delTx = $pdo->prepare("
+                        DELETE t
+                          FROM transactions t
+                          JOIN requirements r ON t.requirement_id = r.requirement_id
+                         WHERE t.user_id = ?
+                           AND r.club_id = ?
+                    ");
+                    $delTx->execute([$target_id, $club_id]);
+                    // Now delete the user
+                    $del = $pdo->prepare("DELETE FROM users WHERE user_id = ? AND club_id = ?");
+                    $del->execute([$target_id, $club_id]);
+                } else if ($type === 'requirement') {
+                    // Cascade delete all transactions for this requirement in the club
+                    $delTx = $pdo->prepare("
+                        DELETE t
+                          FROM transactions t
+                          JOIN requirements r ON t.requirement_id = r.requirement_id
+                         WHERE t.requirement_id = ?
+                           AND r.club_id = ?
+                    ");
+                    $delTx->execute([$target_id, $club_id]);
+                    // Now delete the requirement
+                    $del = $pdo->prepare("DELETE FROM requirements WHERE requirement_id = ? AND club_id = ?");
+                    $del->execute([$target_id, $club_id]);
+                } else if ($type === 'club') {
+                    $del = $pdo->prepare("DELETE FROM club WHERE club_id = ?");
+                    $del->execute([$club_id]);
+                } else if ($type === 'transaction') {
+                    // Only delete if the transaction belongs to a requirement in this club
+                    $del = $pdo->prepare("
+                        DELETE t
+                          FROM transactions t
+                          JOIN requirements r ON t.requirement_id = r.requirement_id
+                         WHERE t.transaction_id = ?
+                           AND r.club_id = ?
+                    ");
+                    $del->execute([$target_id, $club_id]);
+                } else if ($type === 'attendance') {
+                    // Delete attendance record
+                    $del = $pdo->prepare("
+                        DELETE ar
+                          FROM attendance_records ar
+                          JOIN requirements r ON ar.requirement_id = r.requirement_id
+                         WHERE ar.attendance_id = ?
+                           AND r.club_id = ?
+                    ");
+                    $del->execute([$target_id, $club_id]);
+                }
+            } else if ($approval_type === 'attendance_edit' && $type === 'attendance') {
+                // Handle attendance edit requests
+                $newData = null;
+                if (!empty($req['new_data'])) {
+                    if (is_string($req['new_data'])) {
+                        $newData = json_decode($req['new_data'], true);
+                    } else {
+                        $newData = $req['new_data']; // Already decoded
+                    }
+                }
+                
+                if ($newData) {
+                    $updateFields = [];
+                    $updateValues = [];
+                    
+                    if (isset($newData['attendance_status'])) {
+                        $updateFields[] = "attendance_status = ?";
+                        $updateValues[] = $newData['attendance_status'];
+                    }
+                    if (isset($newData['notes'])) {
+                        $updateFields[] = "notes = ?";
+                        $updateValues[] = $newData['notes'];
+                    }
+                    if (isset($newData['scan_datetime'])) {
+                        $updateFields[] = "scan_datetime = ?";
+                        $updateValues[] = $newData['scan_datetime'];
+                    }
+                    
+                    if (!empty($updateFields)) {
+                        $updateValues[] = $target_id;
+                        $updateValues[] = $club_id;
+                        
+                        $updateSql = "
+                            UPDATE attendance_records ar
+                            JOIN requirements r ON ar.requirement_id = r.requirement_id
+                            SET " . implode(", ", $updateFields) . "
+                            WHERE ar.attendance_id = ? AND r.club_id = ?
+                        ";
+                        $updateStmt = $pdo->prepare($updateSql);
+                        $updateStmt->execute($updateValues);
+                    }
+                }
             }
-            $stmt = $pdo->prepare("UPDATE deletion_requests SET status = 'approved', approved_by = ?, approved_at = NOW() WHERE request_id = ?");
+            
+            $stmt = $pdo->prepare("UPDATE approval_requests SET status = 'approved', approved_by = ?, approved_at = NOW() WHERE request_id = ?");
             $stmt->execute([$_SESSION['user_id'], $rid]);
             $pdo->commit();
             $results[] = ['request_id' => $rid, 'success' => true];
@@ -111,7 +166,7 @@ if (!$request_id) {
 try {
     $pdo = new PDO("mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4", "root", "", [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     $pdo->beginTransaction();
-    $stmt = $pdo->prepare("SELECT * FROM deletion_requests WHERE request_id = ? FOR UPDATE");
+    $stmt = $pdo->prepare("SELECT * FROM approval_requests WHERE request_id = ? FOR UPDATE");
     $stmt->execute([$request_id]);
     $req = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$req || $req['status'] !== 'pending') {
@@ -123,47 +178,106 @@ try {
     $type = $req['type'];
     $target_id = (int)$req['target_id'];
     $club_id = (int)$req['club_id'];
-    if ($type === 'user') {
-        // Cascade delete all transactions for this user in the club
-        $delTx = $pdo->prepare("
-            DELETE t
-              FROM transactions t
-              JOIN requirements r ON t.requirement_id = r.requirement_id
-             WHERE t.user_id = ?
-               AND r.club_id = ?
-        ");
-        $delTx->execute([$target_id, $club_id]);
-        // Now delete the user
-        $del = $pdo->prepare("DELETE FROM users WHERE user_id = ? AND club_id = ?");
-        $del->execute([$target_id, $club_id]);
-    } else if ($type === 'requirement') {
-        // Cascade delete all transactions for this requirement in the club
-        $delTx = $pdo->prepare("
-            DELETE t
-              FROM transactions t
-              JOIN requirements r ON t.requirement_id = r.requirement_id
-             WHERE t.requirement_id = ?
-               AND r.club_id = ?
-        ");
-        $delTx->execute([$target_id, $club_id]);
-        // Now delete the requirement
-        $del = $pdo->prepare("DELETE FROM requirements WHERE requirement_id = ? AND club_id = ?");
-        $del->execute([$target_id, $club_id]);
-    } else if ($type === 'club') {
-        $del = $pdo->prepare("DELETE FROM club WHERE club_id = ?");
-        $del->execute([$club_id]);
-    } else if ($type === 'transaction') {
-        // Only delete if the transaction belongs to a requirement in this club
-        $del = $pdo->prepare("
-            DELETE t
-              FROM transactions t
-              JOIN requirements r ON t.requirement_id = r.requirement_id
-             WHERE t.transaction_id = ?
-               AND r.club_id = ?
-        ");
-        $del->execute([$target_id, $club_id]);
+    $approval_type = $req['approval_type'] ?? 'delete'; // Use approval_type instead of request_type
+    
+    // Handle different request types
+    if ($approval_type === 'delete') {
+        // Handle deletion requests
+        if ($type === 'user') {
+            // Cascade delete all transactions for this user in the club
+            $delTx = $pdo->prepare("
+                DELETE t
+                  FROM transactions t
+                  JOIN requirements r ON t.requirement_id = r.requirement_id
+                 WHERE t.user_id = ?
+                   AND r.club_id = ?
+            ");
+            $delTx->execute([$target_id, $club_id]);
+            // Now delete the user
+            $del = $pdo->prepare("DELETE FROM users WHERE user_id = ? AND club_id = ?");
+            $del->execute([$target_id, $club_id]);
+        } else if ($type === 'requirement') {
+            // Cascade delete all transactions for this requirement in the club
+            $delTx = $pdo->prepare("
+                DELETE t
+                  FROM transactions t
+                  JOIN requirements r ON t.requirement_id = r.requirement_id
+                 WHERE t.requirement_id = ?
+                   AND r.club_id = ?
+            ");
+            $delTx->execute([$target_id, $club_id]);
+            // Now delete the requirement
+            $del = $pdo->prepare("DELETE FROM requirements WHERE requirement_id = ? AND club_id = ?");
+            $del->execute([$target_id, $club_id]);
+        } else if ($type === 'club') {
+            $del = $pdo->prepare("DELETE FROM club WHERE club_id = ?");
+            $del->execute([$club_id]);
+        } else if ($type === 'transaction') {
+            // Only delete if the transaction belongs to a requirement in this club
+            $del = $pdo->prepare("
+                DELETE t
+                  FROM transactions t
+                  JOIN requirements r ON t.requirement_id = r.requirement_id
+                 WHERE t.transaction_id = ?
+                   AND r.club_id = ?
+            ");
+            $del->execute([$target_id, $club_id]);
+        } else if ($type === 'attendance') {
+            // Delete attendance record
+            $del = $pdo->prepare("
+                DELETE ar
+                  FROM attendance_records ar
+                  JOIN requirements r ON ar.requirement_id = r.requirement_id
+                 WHERE ar.attendance_id = ?
+                   AND r.club_id = ?
+            ");
+            $del->execute([$target_id, $club_id]);
+        }
+    } else if ($approval_type === 'attendance_edit' && $type === 'attendance') {
+        // Handle attendance edit requests
+        $newData = null;
+        if (!empty($req['new_data'])) {
+            if (is_string($req['new_data'])) {
+                $newData = json_decode($req['new_data'], true);
+            } else {
+                $newData = $req['new_data']; // Already decoded
+            }
+        }
+        
+        if ($newData) {
+            $updateFields = [];
+            $updateValues = [];
+            
+            if (isset($newData['attendance_status'])) {
+                $updateFields[] = "attendance_status = ?";
+                $updateValues[] = $newData['attendance_status'];
+            }
+            if (isset($newData['notes'])) {
+                $updateFields[] = "notes = ?";
+                $updateValues[] = $newData['notes'];
+            }
+            if (isset($newData['scan_datetime'])) {
+                $updateFields[] = "scan_datetime = ?";
+                $updateValues[] = $newData['scan_datetime'];
+            }
+            
+            if (!empty($updateFields)) {
+                $updateValues[] = $target_id;
+                $updateValues[] = $club_id;
+                
+                $updateSql = "
+                    UPDATE attendance_records ar
+                    JOIN requirements r ON ar.requirement_id = r.requirement_id
+                    SET " . implode(", ", $updateFields) . "
+                    WHERE ar.attendance_id = ? AND r.club_id = ?
+                ";
+                $updateStmt = $pdo->prepare($updateSql);
+                $updateStmt->execute($updateValues);
+            }
+        }
     }
-    $stmt = $pdo->prepare("UPDATE deletion_requests SET status = 'approved', approved_by = ?, approved_at = NOW() WHERE request_id = ?");
+    
+    $stmt = $pdo->prepare("UPDATE approval_requests SET status = 'approved', approved_by = ?, approved_at = NOW() WHERE request_id = ?");
     $stmt->execute([$_SESSION['user_id'], $request_id]);
     $pdo->commit();
     echo json_encode(['success' => true]);

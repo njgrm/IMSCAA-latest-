@@ -2,7 +2,7 @@
 // add_user.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
-header("Access-Control-Allow-Origin: http://localhost:5173");
+require_once __DIR__ . '/cors.php';
 header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
@@ -24,7 +24,6 @@ if (!$input) {
     exit;
 }
 
-// Extract fields from input
 $fname = trim($input['fname'] ?? '');
 $mname = trim($input['mname'] ?? '');
 $lname = trim($input['lname'] ?? '');
@@ -37,7 +36,6 @@ $section = trim($input['section'] ?? '');
 $avatar = $input['avatar'] ?? '';
 $club_id = $_SESSION['club_id'] ?? 0;
 
-// Validate required fields
 if (!$fname || !$lname || !$school_id || !$email || !$club_id) {
     http_response_code(400);
     echo json_encode(['error' => 'Missing required fields']);
@@ -56,7 +54,6 @@ try {
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
     );
 
-    // Corrected INSERT statement
     $stmt = $pdo->prepare("
         INSERT INTO `users` (
             username, password, email, role, club_id, school_id,
@@ -69,7 +66,6 @@ try {
         )
     ");
 
-    // Execute with correct parameter order
     $stmt->execute([
         $username,
         $passwordHash,
@@ -86,7 +82,6 @@ try {
         $avatar
     ]);
 
-    // Return updated list
     $stmt2 = $pdo->prepare("
         SELECT 
             user_id, school_id, user_fname, user_mname, user_lname,

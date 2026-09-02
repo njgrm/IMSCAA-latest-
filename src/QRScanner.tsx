@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect, useRef } from "react";
+import React, { useState, useContext, useEffect } from "react";
 import { ThemeContext } from './theme/ThemeContext';
 import { Button, Modal } from "flowbite-react";
 import Sidebar from './components/Sidebar';
@@ -6,7 +6,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Breadcrumb, { BreadcrumbItem } from './components/Breadcrumb';
 import placeholderImage from "./assets/profilePlaceholder.png";
-import QrScanner from 'qr-scanner';
+import { Scanner } from '@yudiel/react-qr-scanner';
 import Searchbar from './components/Searchbar';
 
 interface Event {
@@ -23,8 +23,14 @@ interface TimeSlot {
   slot_name: string;
   start_time: string;
   end_time: string;
-  date: string;
   is_active: boolean;
+}
+
+interface AttendanceForm {
+  event_id: number;
+  time_slot_id?: number;
+  attendance_status: 'present' | 'late' | 'excused';
+  notes: string;
 }
 
 interface ScannedUser {
@@ -40,17 +46,8 @@ interface ScannedUser {
   qr_code_data: string;
 }
 
-interface AttendanceForm {
-  event_id: number;
-  time_slot_id?: number;
-  attendance_status: 'present' | 'late' | 'excused';
-  notes: string;
-}
-
 const QRScanner: React.FC = () => {
   const { theme } = useContext(ThemeContext);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const qrScannerRef = useRef<QrScanner | null>(null);
   
   const [isScanning, setIsScanning] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
@@ -60,6 +57,7 @@ const QRScanner: React.FC = () => {
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [scannerError, setScannerError] = useState<string | null>(null);
   
   const [attendanceForm, setAttendanceForm] = useState<AttendanceForm>({
     event_id: 0,
@@ -77,7 +75,7 @@ const QRScanner: React.FC = () => {
   // Fetch events
   const fetchEvents = async () => {
     try {
-      const response = await fetch('http://localhost/my-app-server/get_requirement.php', {
+      const response = await fetch('/my-app-server/get_requirement.php', {
         credentials: 'include'
       });
       
@@ -98,7 +96,7 @@ const QRScanner: React.FC = () => {
   // Fetch time slots for selected event
   const fetchTimeSlots = async (eventId: number) => {
     try {
-      const response = await fetch(`http://localhost/my-app-server/get_time_slots.php?requirement_id=${eventId}`, {
+      const response = await fetch(`/my-app-server/get_time_slots.php?requirement_id=${eventId}`, {
         credentials: 'include'
       });
       
@@ -125,80 +123,42 @@ const QRScanner: React.FC = () => {
     }
   }, [selectedEvent]);
 
-  // Initialize QR Scanner
-  const initializeScanner = async () => {
-    if (!videoRef.current || !selectedEvent) {
+  // Start QR Scanner
+  const startScanner = () => {
+    if (!selectedEvent) {
       toast.error('Please select an event first');
       return;
     }
-
-    try {
-      setLoading(true);
-      
-      // Check if QrScanner is supported
-      const hasCamera = await QrScanner.hasCamera();
-      if (!hasCamera) {
-        toast.error('No camera found');
-        return;
-      }
-
-      // Stop existing scanner if any
-      if (qrScannerRef.current) {
-        qrScannerRef.current.stop();
-        qrScannerRef.current.destroy();
-      }
-
-      // Create new scanner
-      qrScannerRef.current = new QrScanner(
-        videoRef.current,
-        (result: { data: string }) => handleQRScan(result.data),
-        {
-          highlightScanRegion: true,
-          highlightCodeOutline: true,
-          preferredCamera: 'back',
-          maxScansPerSecond: 3,
-        }
-      );
-
-      await qrScannerRef.current.start();
-      setIsScanning(true);
-      toast.success('Scanner started. Point camera at QR code.');
-    } catch (error: any) {
-      console.error('Scanner initialization error:', error);
-      toast.error('Failed to start camera: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
+    setIsScanning(true);
+    setScannerError(null);
+    toast.success('Scanner started. Point camera at QR code.');
   };
 
   // Stop QR Scanner
   const stopScanner = () => {
-    if (qrScannerRef.current) {
-      qrScannerRef.current.stop();
-      setIsScanning(false);
-      toast.info('Scanner stopped');
-    }
+    setIsScanning(false);
+    toast.info('Scanner stopped');
   };
 
   // Handle QR code scan
-  const handleQRScan = async (qrData: string) => {
-    if (!selectedEvent || !qrData) return;
+  const handleQRScan = async (detectedCodes: any[]) => {
+    if (!selectedEvent || !detectedCodes || detectedCodes.length === 0) return;
+    
+    const result = detectedCodes[0].rawValue;
+    if (!result) return;
 
     // Temporarily stop scanner to prevent multiple scans
-    if (qrScannerRef.current) {
-      qrScannerRef.current.stop();
-      setIsScanning(false);
-    }
+    setIsScanning(false);
 
     try {
       setLoading(true);
       
       // Verify QR code with backend
-      const response = await fetch('http://localhost/my-app-server/verify_qr_code.php', {
+      const response = await fetch('/my-app-server/verify_qr_code.php', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qr_code_data: qrData })
+        body: JSON.stringify({ qr_code_data: result })
       });
 
       const data = await response.json();
@@ -215,24 +175,25 @@ const QRScanner: React.FC = () => {
         toast.error('Invalid QR code or user not found');
         // Restart scanner after error
         setTimeout(() => {
-          if (qrScannerRef.current && videoRef.current) {
-            qrScannerRef.current.start();
-            setIsScanning(true);
-          }
+          setIsScanning(true);
         }, 2000);
       }
     } catch (error: any) {
       toast.error(error.message || 'QR verification failed');
       // Restart scanner after error
       setTimeout(() => {
-        if (qrScannerRef.current && videoRef.current) {
-          qrScannerRef.current.start();
-          setIsScanning(true);
-        }
+        setIsScanning(true);
       }, 2000);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handle scan errors
+  const handleScanError = (error: any) => {
+    console.error('QR Scanner Error:', error);
+    setScannerError(error?.message || 'Scanner error occurred');
+    toast.error('Scanner error: ' + (error?.message || 'Unknown error'));
   };
 
   // Record attendance
@@ -242,7 +203,7 @@ const QRScanner: React.FC = () => {
     try {
       setLoading(true);
       
-      const response = await fetch('http://localhost/my-app-server/record_attendance.php', {
+      const response = await fetch('/my-app-server/record_attendance.php', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -268,10 +229,7 @@ const QRScanner: React.FC = () => {
       
       // Restart scanner
       setTimeout(() => {
-        if (qrScannerRef.current && videoRef.current) {
-          qrScannerRef.current.start();
-          setIsScanning(true);
-        }
+        setIsScanning(true);
       }, 1000);
     } catch (error: any) {
       toast.error(error.message || 'Failed to record attendance');
@@ -287,22 +245,9 @@ const QRScanner: React.FC = () => {
     
     // Restart scanner
     setTimeout(() => {
-      if (qrScannerRef.current && videoRef.current) {
-        qrScannerRef.current.start();
-        setIsScanning(true);
-      }
+      setIsScanning(true);
     }, 500);
   };
-
-  // Cleanup scanner on unmount
-  useEffect(() => {
-    return () => {
-      if (qrScannerRef.current) {
-        qrScannerRef.current.stop();
-        qrScannerRef.current.destroy();
-      }
-    };
-  }, []);
 
   const handleFormChange = (e: React.ChangeEvent<HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -313,9 +258,9 @@ const QRScanner: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 py-14">
+    <div className="flex min-h-screen min-w-0 w-full bg-gray-50 dark:bg-gray-900 py-14">
       <Sidebar />
-      <div className="flex-1 sm:ml-64 relative flex flex-col">
+      <div className="flex min-w-0 flex-1 sm:ml-64 relative flex-col">
         <div className="p-3 sm:px-5 sm:pt-5 sm:pb-1">
           <Breadcrumb items={trail} />
           <div className="flex flex-col sm:flex-row sm:items-center justify-between dark:border-gray-700 pt-0 mb-0 gap-4 sm:gap-0">
@@ -333,7 +278,7 @@ const QRScanner: React.FC = () => {
         </div>
 
         {/* Main content */}
-        <div className="flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
+        <div className="min-w-0 flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Event Selection */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
@@ -347,25 +292,18 @@ const QRScanner: React.FC = () => {
                     key={event.requirement_id}
                     className={`p-3 border rounded-lg cursor-pointer transition-colors ${
                       selectedEvent?.requirement_id === event.requirement_id
-                            ? 'border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20'
+                        ? 'border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20'
                         : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
                     }`}
                     onClick={() => setSelectedEvent(event)}
                   >
                     <h3 className="font-medium text-gray-900 dark:text-white text-sm mb-1">{event.title}</h3>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                      <div className="flex items-center">
-                        <svg className="w-3 h-3 text-gray-500 dark:text-primary-400 mr-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-                          <path fillRule="evenodd" d="M11.906 1.994a8.002 8.002 0 0 1 8.09 8.421 7.996 7.996 0 0 1-1.297 3.957.996.996 0 0 1-.133.204l-.108.129c-.178.243-.37.477-.573.699l-5.112 6.224a1 1 0 0 1-1.545 0L5.982 15.26l-.002-.002a18.146 18.146 0 0 1-.309-.38l-.133-.163a.999.999 0 0 1-.13-.202 7.995 7.995 0 0 1 6.498-12.518ZM15 9.997a3 3 0 1 1-5.999 0 3 3 0 0 1 5.999 0Z" clipRule="evenodd"/>
-                        </svg>
-                        {event.location}
-                      </div>
-                      <div className="flex items-center">
-                        <svg className="w-3 h-3 text-gray-500 dark:text-primary-400 mr-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-                          <path fillRule="evenodd" d="M5 5a1 1 0 0 0 1-1 1 1 0 1 1 2 0 1 1 0 0 0 1 1h1a1 1 0 0 0 1-1 1 1 0 1 1 2 0 1 1 0 0 0 1 1h1a1 1 0 0 0 1-1 1 1 0 1 1 2 0 1 1 0 0 0 1 1 2 2 0 0 1 2 2v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a2 2 0 0 1 2-2ZM3 19v-7a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Zm6.01-6a1 1 0 1 0-2 0 1 1 0 0 0 2 0Zm2 0a1 1 0 1 1 2 0 1 1 0 0 1-2 0Zm6 0a1 1 0 1 0-2 0 1 1 0 0 0 2 0Zm-10 4a1 1 0 1 1 2 0 1 1 0 0 1-2 0Zm6 0a1 1 0 1 0-2 0 1 1 0 0 0 2 0Zm2 0a1 1 0 1 1 2 0 1 1 0 0 1-2 0Z" clipRule="evenodd"/>
-                        </svg>
-                        {new Date(event.start_datetime).toLocaleDateString()}
-                      </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 line-clamp-2">{event.description}</p>
+                    <div className="flex items-center text-xs text-gray-400 dark:text-gray-500">
+                      <svg className="w-3 h-3 text-gray-600 dark:text-gray-400 mr-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                        <path fillRule="evenodd" d="M11.906 1.994a8.002 8.002 0 0 1 8.09 8.421 7.996 7.996 0 0 1-1.297 3.957.996.996 0 0 1-.133.204l-.108.129c-.178.243-.37.477-.573.699l-5.112 6.224a1 1 0 0 1-1.545 0L5.982 15.26l-.002-.002a18.146 18.146 0 0 1-.309-.38l-.133-.163a.999.999 0 0 1-.13-.202 7.995 7.995 0 0 1 6.498-12.518ZM15 9.997a3 3 0 1 1-5.999 0 3 3 0 0 1 5.999 0Z" clipRule="evenodd"/>
+                      </svg>
+                      {event.location}
                     </div>
                   </div>
                 ))}
@@ -394,13 +332,13 @@ const QRScanner: React.FC = () => {
             <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-lg shadow p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Camera Scanner
+                  QR Scanner
                 </h2>
                 
                 <div className="flex space-x-2">
                   {!isScanning ? (
                     <Button
-                      onClick={initializeScanner}
+                      onClick={startScanner}
                       disabled={!selectedEvent || loading}
                       className="bg-primary-600 hover:bg-primary-500 text-white"
                     >
@@ -412,7 +350,7 @@ const QRScanner: React.FC = () => {
                       ) : (
                         <>
                           <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 002 2v8a2 2 0 002 2z"/>
                           </svg>
                           Start Scanner
                         </>
@@ -433,34 +371,40 @@ const QRScanner: React.FC = () => {
                 </div>
               </div>
 
-              {/* Video Container */}
+              {/* Scanner Container */}
               <div className="relative bg-black rounded-lg overflow-hidden" style={{ aspectRatio: '16/9' }}>
-                <video
-                  ref={videoRef}
-                  className="w-full h-full object-cover"
-                  playsInline
-                  muted
-                />
-                
-                {!isScanning && !loading && (
+                {isScanning ? (
+                  <div style={{ width: '100%', height: '100%' }}>
+                    <Scanner
+                      onScan={handleQRScan}
+                      onError={handleScanError}
+                      constraints={{
+                        facingMode: 'environment'
+                      }}
+                      formats={['qr_code']}
+                      scanDelay={100}
+                    />
+                  </div>
+                ) : (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-75">
                     <div className="text-center text-white">
                       <svg className="mx-auto h-16 w-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 002 2v8a2 2 0 002 2z"/>
                       </svg>
-                      <h3 className="text-lg font-medium">Camera Not Active</h3>
+                      <h3 className="text-lg font-medium">QR Scanner Ready</h3>
                       <p className="text-sm text-gray-300 mt-1">
-                        {!selectedEvent ? 'Select an event first, then start the scanner' : 'Click "Start Scanner" to begin'}
+                        {!selectedEvent ? 'Select an event first, then start the scanner' : 'Click "Start Scanner" to begin scanning'}
                       </p>
+                  
                     </div>
                   </div>
                 )}
                 
                 {loading && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-75">
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-75 z-10">
                     <div className="text-center text-white">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
-                      <p className="text-sm">Initializing camera...</p>
+                      <p className="text-sm">Processing scan...</p>
                     </div>
                   </div>
                 )}
@@ -472,7 +416,21 @@ const QRScanner: React.FC = () => {
                   <div className="flex items-center">
                     <div className="animate-pulse w-3 h-3 bg-green-500 rounded-full mr-3"></div>
                     <span className="text-sm text-green-800 dark:text-green-200 font-medium">
-                      Scanner Active - Point camera at QR code
+                      Enhanced Scanner Active - QR codes detected automatically from any position
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Error Display */}
+              {scannerError && (
+                <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg">
+                  <div className="flex items-center">
+                    <svg className="w-5 h-5 text-red-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"/>
+                    </svg>
+                    <span className="text-sm text-red-800 dark:text-red-200">
+                      Scanner Error: {scannerError}
                     </span>
                   </div>
                 </div>
