@@ -47,7 +47,7 @@ CREATE TABLE `users` (
   PRIMARY KEY (`user_id`),
   UNIQUE KEY `uk_users_username` (`username`),
   UNIQUE KEY `uk_users_email` (`email`),
-  UNIQUE KEY `uk_users_school_id` (`school_id`),
+  UNIQUE KEY `uk_users_club_school_id` (`club_id`,`school_id`),
   KEY `idx_users_club_id` (`club_id`),
   KEY `idx_users_role` (`role`),
   KEY `idx_users_club_active` (`club_id`),

@@ -192,8 +192,14 @@ const QRScanner: React.FC = () => {
   // Handle scan errors
   const handleScanError = (error: any) => {
     console.error('QR Scanner Error:', error);
-    setScannerError(error?.message || 'Scanner error occurred');
-    toast.error('Scanner error: ' + (error?.message || 'Unknown error'));
+    const errorName = error?.name;
+    const message = errorName === 'NotAllowedError'
+      ? 'Camera access was blocked. Allow camera access for this site and try again.'
+      : errorName === 'OverconstrainedError'
+        ? 'This camera does not support the requested resolution. Try another camera or device.'
+        : error?.message || 'Scanner error occurred';
+    setScannerError(message);
+    toast.error('Scanner error: ' + message);
   };
 
   // Record attendance
@@ -379,7 +385,9 @@ const QRScanner: React.FC = () => {
                       onScan={handleQRScan}
                       onError={handleScanError}
                       constraints={{
-                        facingMode: 'environment'
+                        facingMode: { ideal: 'environment' },
+                        width: { min: 320, ideal: 1280 },
+                        height: { min: 240, ideal: 720 }
                       }}
                       formats={['qr_code']}
                       scanDelay={100}

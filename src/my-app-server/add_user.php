@@ -54,6 +54,32 @@ try {
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
     );
 
+    // A School ID may belong to multiple clubs, but only once within this club.
+    $duplicateStmt = $pdo->prepare("SELECT user_id FROM `users` WHERE club_id = ? AND school_id = ? LIMIT 1");
+    $duplicateStmt->execute([$club_id, $school_id]);
+    $duplicate = $duplicateStmt->fetch(PDO::FETCH_ASSOC);
+
+    if ($duplicate) {
+        http_response_code(409);
+        echo json_encode([
+            'error' => 'A user with this School ID already exists in this club.',
+            'code' => 'DUPLICATE_SCHOOL_ID_IN_CLUB'
+        ]);
+        exit;
+    }
+
+    // Email remains globally unique because it is a user account credential/contact.
+    $duplicateEmailStmt = $pdo->prepare("SELECT user_id FROM `users` WHERE email = ? LIMIT 1");
+    $duplicateEmailStmt->execute([$email]);
+    if ($duplicateEmailStmt->fetch(PDO::FETCH_ASSOC)) {
+        http_response_code(409);
+        echo json_encode([
+            'error' => 'A user with this email address already exists.',
+            'code' => 'DUPLICATE_EMAIL'
+        ]);
+        exit;
+    }
+
     $stmt = $pdo->prepare("
         INSERT INTO `users` (
             username, password, email, role, club_id, school_id,
@@ -95,6 +121,22 @@ try {
     http_response_code(201);
     echo json_encode(['users' => $users]);
 } catch (PDOException $e) {
-    http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
+    // Keep the response user-facing if another request wins the race after the precheck.
+    if ($e->getCode() === '23000' && stripos($e->getMessage(), 'school_id') !== false) {
+        http_response_code(409);
+        echo json_encode([
+            'error' => 'A user with this School ID already exists in this club.',
+            'code' => 'DUPLICATE_SCHOOL_ID_IN_CLUB'
+        ]);
+    } elseif ($e->getCode() === '23000' && stripos($e->getMessage(), 'email') !== false) {
+        http_response_code(409);
+        echo json_encode([
+            'error' => 'A user with this email address already exists.',
+            'code' => 'DUPLICATE_EMAIL'
+        ]);
+    } else {
+        error_log('add_user.php database error: ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['error' => 'Unable to add the user right now.']);
+    }
 }
