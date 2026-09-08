@@ -514,7 +514,7 @@ const Requirements: React.FC = () => {
   useEffect(() => {
     const handler = () => {
       fetchMyDeletionRequests();
-      fetchRequirements && fetchRequirements();
+      fetchRequirements();
     };
     window.addEventListener('deletion-request-status', handler);
     return () => window.removeEventListener('deletion-request-status', handler);
@@ -792,6 +792,7 @@ const Requirements: React.FC = () => {
 
       {/* Add Modal */}
       <Modal
+        dismissible
         show={isAddOpen}
         onClose={() => {
           setIsAddOpen(false)
@@ -804,7 +805,7 @@ const Requirements: React.FC = () => {
           {(form.requirement_type === 'event' || form.requirement_type === 'activity') ? (
             // Large modal with user selection
             <div className="mx-auto max-w-[95vw] py-4">
-              <div className="grid grid-cols-[2fr_3fr] gap-x-6 gap-y-2 dark:text-white">
+              <div className="grid grid-cols-1 gap-x-6 gap-y-2 dark:text-white lg:grid-cols-[2fr_3fr]">
                 
                 {/* Left: Requirement Details */}
                 <div className="space-y-4">
@@ -813,6 +814,7 @@ const Requirements: React.FC = () => {
                     <div>
                       <label className="block mb-1 text-sm">Title</label>
                       <input
+                        aria-label="Requirement title"
                         type="text"
                         name="title"
                         value={form.title}
@@ -825,6 +827,7 @@ const Requirements: React.FC = () => {
                     <div>
                       <label className="block mb-1 text-sm">Description</label>
                       <textarea
+                        aria-label="Requirement description"
                         name="description"
                         value={form.description}
                         onChange={handleFormChange}
@@ -834,10 +837,11 @@ const Requirements: React.FC = () => {
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div>
                         <label className="block mb-1 text-sm">Start Date</label>
                         <input
+                          aria-label="Requirement start date"
                           type="date"
                           name="start_datetime"
                           value={form.start_datetime}
@@ -849,6 +853,7 @@ const Requirements: React.FC = () => {
                       <div>
                         <label className="block mb-1 text-sm">End Date</label>
                         <input
+                          aria-label="Requirement end date"
                           type="date"
                           name="end_datetime"
                           value={form.end_datetime}
@@ -862,6 +867,7 @@ const Requirements: React.FC = () => {
                     <div>
                       <label className="block mb-1 text-sm">Location</label>
                       <input
+                        aria-label="Requirement location"
                         type="text"
                         name="location"
                         value={form.location}
@@ -870,10 +876,11 @@ const Requirements: React.FC = () => {
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div>
                         <label className="block mb-1 text-sm">Type</label>
                         <select
+                          aria-label="Requirement type"
                           name="requirement_type"
                           value={form.requirement_type}
                           onChange={handleFormChange}
@@ -887,6 +894,7 @@ const Requirements: React.FC = () => {
                       <div>
                         <label className="block mb-1 text-sm">Status</label>
                         <select
+                          aria-label="Requirement status"
                           name="status"
                           value={form.status}
                           onChange={handleFormChange}
@@ -969,6 +977,7 @@ const Requirements: React.FC = () => {
                       onSearchChange={setUserSearch}
                     />
                     <select
+                      aria-label="Filter users by course"
                       className="px-3 py-2 mb-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
                       value={userFilters.course}
                       onChange={e => setUserFilters(prev => ({ ...prev, course: e.target.value }))}
@@ -979,6 +988,7 @@ const Requirements: React.FC = () => {
                       ))}
                     </select>
                     <select
+                      aria-label="Filter users by year"
                       className="px-3 py-2 mb-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
                       value={userFilters.year}
                       onChange={e => setUserFilters(prev => ({ ...prev, year: e.target.value }))}
@@ -993,6 +1003,7 @@ const Requirements: React.FC = () => {
                 ))}
                     </select>
                     <select
+                      aria-label="Filter users by section"
                       className="px-3 py-2 mb-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
                       value={userFilters.section}
                       onChange={e => setUserFilters(prev => ({ ...prev, section: e.target.value }))}
@@ -1017,6 +1028,7 @@ const Requirements: React.FC = () => {
                         <tr>
                           <th className="px-2">
                             <input
+                              aria-label="Select all users"
                               type="checkbox"
                               onChange={handleSelectAllUsers}
                               checked={selectedUsers.length === filteredUsers.length && filteredUsers.length > 0}
@@ -1038,6 +1050,7 @@ const Requirements: React.FC = () => {
                           >
                             <td className="px-2 py-1 pl-5">
                               <input
+                                aria-label={`Select ${u.user_fname} ${u.user_lname}`}
                                 type="checkbox"
                                 checked={selectedUsers.includes(u.user_id)}
                                 onChange={() => handleUserCheckbox(u.user_id)}
@@ -1232,7 +1245,7 @@ const Requirements: React.FC = () => {
       </Modal>
 
     {/* Edit Modal */}
-<Modal show={isEditOpen} onClose={() => setIsEditOpen(false)}>
+<Modal dismissible show={isEditOpen} onClose={() => setIsEditOpen(false)}>
 <Modal.Header className="dark:bg-gray-800 rounded">Edit Requirement</Modal.Header>
 <Modal.Body className="dark:bg-gray-800 dark:text-white py-2 pb-2 rounded">
     <form onSubmit={saveEdit} className="grid grid-cols-1 gap-4">
@@ -1404,7 +1417,7 @@ const Requirements: React.FC = () => {
 </Modal>
 
     {/* Delete Requirement Modal */}
-<Modal show={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}>
+<Modal dismissible show={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}>
   <Modal.Body className="p-4 text-center bg-white dark:bg-gray-800 rounded-lg shadow sm:p-5">
     <button
       onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}

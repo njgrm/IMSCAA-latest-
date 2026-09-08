@@ -1,11 +1,12 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('POST'); $actor=require_operator();
 require_once __DIR__ . '/cors.php';
 header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Content-Type: application/json; charset=utf-8");
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 
@@ -54,15 +55,15 @@ $expiry_dt = (new DateTime())->add(new DateInterval('PT' . $expiry_seconds . 'S'
 
 // Permission check
 if ($user_role === 'adviser') {
-  if (!in_array($invite_role, ['adviser', 'president', 'officer', 'member'])) {
+  if (!in_array($invite_role, ['president', 'officer', 'member'])) {
     http_response_code(403);
     echo json_encode(['error' => 'Invalid role for invite']);
     exit;
   }
 } else if ($user_role === 'president') {
-  if (!in_array($invite_role, ['officer', 'member'])) {
+  if ($invite_role !== 'member') {
     http_response_code(403);
-    echo json_encode(['error' => 'Invalid role for invite']);
+    echo json_encode(['error' => 'Presidents can only generate member invites']);
     exit;
   }
 } else if ($user_role === 'officer') {
@@ -81,12 +82,7 @@ if ($user_role === 'adviser') {
 $token = bin2hex(random_bytes(24));
 
 try {
-  $pdo = new PDO(
-    "mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4",
-    "root",
-    "",
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-  );
+  $pdo = db();
 
   $stmt = $pdo->prepare("
     INSERT INTO invite_links
@@ -112,5 +108,6 @@ try {
   
 catch (PDOException $e) {
   http_response_code(500);
-  echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+  error_log('IMSCCA request failure: ' . $e->getMessage());
+  api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }

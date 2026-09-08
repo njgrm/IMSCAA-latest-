@@ -137,6 +137,7 @@ const FilterDropdownAttendance: React.FC<FilterDropdownAttendanceProps> = ({
         {/* Course / Year / Section */}
         <div className="px-4 py-0 dark:border-gray-600 space-y-2">
           <select
+            aria-label="Filter by course"
             value={filters.course}
             onChange={e =>
               setFilters(f => ({ ...f, course: e.target.value }))
@@ -152,6 +153,7 @@ const FilterDropdownAttendance: React.FC<FilterDropdownAttendanceProps> = ({
           </select>
 
           <select
+            aria-label="Filter by year"
             value={filters.year}
             onChange={e =>
               setFilters(f => ({ ...f, year: e.target.value }))
@@ -169,6 +171,7 @@ const FilterDropdownAttendance: React.FC<FilterDropdownAttendanceProps> = ({
           </select>
 
           <select
+            aria-label="Filter by section"
             value={filters.section}
             onChange={e =>
               setFilters(f => ({ ...f, section: e.target.value }))

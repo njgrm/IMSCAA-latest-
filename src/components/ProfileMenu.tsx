@@ -99,7 +99,7 @@ const ProfileMenu: React.FC = () => {
       <button
         onClick={() => setOpen(prev => !prev)}
         aria-expanded={open}
-        className="flex items-center justify-center w-8 h-8 bg-gray-800 rounded-full focus:ring-2 focus:ring-gray-300 dark:focus:ring-gray-600"
+        className="flex h-10 w-10 items-center justify-center bg-gray-800 rounded-full focus:ring-2 focus:ring-gray-300 dark:focus:ring-gray-600"
       >
         <span className="sr-only">Open user menu</span>
         <img

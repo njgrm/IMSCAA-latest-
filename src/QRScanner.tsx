@@ -449,7 +449,7 @@ const QRScanner: React.FC = () => {
 
         {/* Verification Modal */}
         {scannedUser && (
-          <Modal show={isVerificationModalOpen} onClose={() => setIsVerificationModalOpen(false)} size="lg">
+          <Modal dismissible show={isVerificationModalOpen} onClose={() => setIsVerificationModalOpen(false)} size="lg">
             <Modal.Header className="dark:bg-gray-800">
               Verify Student Identity
             </Modal.Header>

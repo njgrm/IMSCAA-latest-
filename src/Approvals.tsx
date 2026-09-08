@@ -973,6 +973,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                 <tr>
                   <th className="px-2 sm:px-2 py-2 pl-0">
                     <input
+                      aria-label="Select all approval requests"
                       type="checkbox"
                       onChange={toggleAllRequests}
                       checked={selectedRequests.length === groupedRequests.length && groupedRequests.length > 0}
@@ -1007,7 +1008,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                     typeLabel = 'Requirement';
                   } else if (first.type === 'transaction') {
                     const t = transactions.find(t => t.transaction_id === first.target_id);
-                    let r = t ? feeRequirements.find(r => r.requirement_id === t.requirement_id) : null;
+                    const r = t ? feeRequirements.find(r => r.requirement_id === t.requirement_id) : null;
                     const u = t ? users.find(u => u.user_id === t.user_id) : null;
                     userName = u ? `${u.user_fname} ${u.user_lname}` : `User #${t?.user_id ?? ''}`;
                     const reqTitle = r ? r.title : `Txn #${t?.transaction_id ?? first.target_id}`;
@@ -1041,6 +1042,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                     <tr key={first.request_id} className="border-b dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
                       <td data-label="Select" className="px-2 sm:px-4 py-2">
                         <input
+                          aria-label={`Select approval request for ${title}`}
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleRequest(first.request_id)}
@@ -1132,7 +1134,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         )}
 
 {/* Add Transaction Modal */}
-<Modal show={isAddOpen} onClose={() => setIsAddOpen(false)} size="7x1">
+<Modal dismissible show={isAddOpen} onClose={() => setIsAddOpen(false)} size="7x1">
   <Modal.Header className="dark:bg-gray-800 rounded px-10">
     Create New Transactions
   </Modal.Header>
@@ -1353,7 +1355,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 </Modal>
 
         {/* ── Edit Transaction Modal ────────────────── */}
-        <Modal show={isEditOpen} onClose={() => setIsEditOpen(false)}>
+        <Modal dismissible show={isEditOpen} onClose={() => setIsEditOpen(false)}>
         <Modal.Header className="dark:bg-gray-800 rounded">Edit Transaction</Modal.Header>
         <Modal.Body className="dark:bg-gray-800 dark:text-white py-2 pb-6 rounded-lg">
         {editTxnId != null && (() => {
@@ -1470,7 +1472,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         </Modal>
 
         {/* ── Update Transaction Modal ────────────────── */}
-        <Modal show={isUpdateOpen} onClose={() => setIsUpdateOpen(false)}>
+        <Modal dismissible show={isUpdateOpen} onClose={() => setIsUpdateOpen(false)}>
         <Modal.Header className="dark:bg-gray-800 rounded">
           <div className="flex items-center">
             <svg className="w-5 h-5 mr-2 text-secondary-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
@@ -1674,7 +1676,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                 </Modal>
 
          {/* ── MASS EDIT Transaction Modal ────────────────── */}
-                <Modal show={isMassEditOpen} onClose={() => setIsMassEditOpen(false)} size="4xl">
+                <Modal dismissible show={isMassEditOpen} onClose={() => setIsMassEditOpen(false)} size="4xl">
                     <Modal.Header className="dark:bg-gray-800 rounded">
              <div className="flex items-center">
                   <svg className="w-5 h-5 mr-2 text-primary-600" fill="currentColor" viewBox="0 0 20 20">
@@ -1798,7 +1800,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                     </Modal>
 
                 {/* ── MASS EDIT CONFIRMATION ───────────────────────── */}
-                <Modal show={isMassConfirmOpen} onClose={() => setIsMassConfirmOpen(false)} size="lg">
+                <Modal dismissible show={isMassConfirmOpen} onClose={() => setIsMassConfirmOpen(false)} size="lg">
                 <Modal.Body className="p-4 text-center bg-white dark:bg-gray-800 rounded-lg shadow sm:p-5">
                 <button
                         onClick={() => setIsMassConfirmOpen(false)}
@@ -1883,7 +1885,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                 </Modal>
 
                 {/* ── MASS DELETE CONFIRMATION ─────────────────────── */}
-<Modal show={isMassDeleteConfirmOpen} onClose={() => setIsMassDeleteConfirmOpen(false)} size="lg">
+<Modal dismissible show={isMassDeleteConfirmOpen} onClose={() => setIsMassDeleteConfirmOpen(false)} size="lg">
   <Modal.Body className="p-4 text-center bg-white dark:bg-gray-800 rounded-lg shadow sm:p-5">
     <button
       onClick={() => setIsMassDeleteConfirmOpen(false)}
@@ -1952,7 +1954,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 </Modal>
 
         {/* ── MASS UPDATE MODAL ───────────────────────── */}
-        <Modal show={isMassUpdateOpen} onClose={() => setIsMassUpdateOpen(false)} size="4xl">
+        <Modal dismissible show={isMassUpdateOpen} onClose={() => setIsMassUpdateOpen(false)} size="4xl">
             <Modal.Header className="dark:bg-gray-800 rounded">
                 <div className="flex items-center">
                     <svg className="w-5 h-5 mr-2 text-secondary-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
@@ -2078,7 +2080,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         </Modal>
 
         {/* ── MASS UPDATE CONFIRMATION ───────────────────────── */}
-        <Modal show={isMassUpdateConfirmOpen} onClose={() => setIsMassUpdateConfirmOpen(false)} size="lg">
+        <Modal dismissible show={isMassUpdateConfirmOpen} onClose={() => setIsMassUpdateConfirmOpen(false)} size="lg">
         <Modal.Body className="p-4 text-center bg-white dark:bg-gray-800 rounded-lg shadow sm:p-5">
         <button
                 onClick={() => setIsMassUpdateConfirmOpen(false)}
@@ -2251,7 +2253,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
           );
         } else if (first.type === 'transaction') {
           const t = transactions.find(t => t.transaction_id === first.target_id);
-          let r = t ? feeRequirements.find(r => r.requirement_id === t.requirement_id) : null;
+          const r = t ? feeRequirements.find(r => r.requirement_id === t.requirement_id) : null;
           const u = t ? users.find(u => u.user_id === t.user_id) : null;
           userName = u ? `${u.user_fname} ${u.user_lname}` : `User #${t?.user_id ?? ''}`;
           const reqTitle = r ? r.title : `Txn #${t?.transaction_id ?? first.target_id}`;

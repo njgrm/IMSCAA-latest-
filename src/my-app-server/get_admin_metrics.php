@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('GET'); $actor=require_operator();
 // Dashboard metrics for adviser, president, and officer accounts.
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -11,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 $userId = (int)($_SESSION['user_id'] ?? 0);
 $clubId = (int)($_SESSION['club_id'] ?? 0);
@@ -30,14 +31,9 @@ if (!in_array($role, ['adviser', 'president', 'officer'], true)) {
 }
 
 try {
-    $pdo = new PDO(
-        'mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4',
-        'root',
-        '',
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-    );
+    $pdo = db();
 
-    $membersStmt = $pdo->prepare('SELECT COUNT(*) FROM users WHERE club_id = ?');
+    $membersStmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE club_id = ? AND LOWER(role) <> 'adviser'");
     $membersStmt->execute([$clubId]);
     $totalMembers = (int)$membersStmt->fetchColumn();
 

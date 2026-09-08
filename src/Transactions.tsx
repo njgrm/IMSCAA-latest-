@@ -694,7 +694,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
       const u = userMap[t.user_id];
       const r = requirementMap[t.requirement_id];
       improvedDeleteModal = (
-        <Modal show={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }} size="lg">
+        <Modal dismissible show={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }} size="lg">
           <Modal.Body className="p-4 text-center bg-white dark:bg-gray-800 rounded-lg shadow sm:p-5">
             <button
               onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}
@@ -786,7 +786,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
   useEffect(() => {
     const handler = () => {
       fetchMyDeletionRequests();
-      fetchTransactions && fetchTransactions();
+      fetchTransactions();
     };
     window.addEventListener('deletion-request-status', handler);
     return () => window.removeEventListener('deletion-request-status', handler);
@@ -886,6 +886,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                 <tr>
                   <th className="px-2 py-2 pl-0">
                     <input
+                      aria-label="Select all transactions"
                       type="checkbox"
                       onChange={toggleAllTxns}
                       checked={selectedTxns.length === filteredTxns.length && filteredTxns.length > 0}
@@ -916,6 +917,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                       {/* Checkbox */}
                       <td data-label="Select" className="px-4 py-2">
                         <input
+                          aria-label={`Select transaction for ${u?.user_fname ?? ''} ${u?.user_lname ?? ''}`.trim()}
                           type="checkbox"
                           checked={selectedTxns.includes(t.transaction_id)}
                           onChange={() => toggleTxn(t.transaction_id)}
@@ -1025,7 +1027,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         )}
 
 {/* Add Transaction Modal */}
-<Modal show={isAddOpen} onClose={() => setIsAddOpen(false)} size="7x1">
+<Modal dismissible show={isAddOpen} onClose={() => setIsAddOpen(false)} size="7x1">
   <Modal.Header className="dark:bg-gray-800 rounded px-10">
     Create New Transactions
   </Modal.Header>
@@ -1033,7 +1035,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
   <Modal.Body className="dark:bg-gray-800 rounded p-0">
     <div className="mx-auto max-w-[95vw] py-4">
       {/* 3-column grid */}
-      <div className="grid grid-cols-[3fr_2fr_1fr] gap-x-6 gap-y-2 dark:text-white">
+      <div className="grid grid-cols-1 gap-x-6 gap-y-4 dark:text-white xl:grid-cols-[3fr_2fr_1fr]">
 
         {/* ── USERS ── */}
         <div className="flex flex-col bg-white dark:bg-gray-900 rounded-lg overflow-hidden max-h-[71vh] py-2 space-y-2">
@@ -1044,6 +1046,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
               onSearchChange={setAddUserSearch}
             />
             <select
+              aria-label="Filter users by course"
                className=" px-3 py-2 mb-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
               value={addUserCourse}
               onChange={e => setAddUserCourse(e.target.value)}
@@ -1054,6 +1057,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
               ))}
             </select>
             <select
+              aria-label="Filter users by year"
                className=" px-3 py-2 mb-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
               value={addUserYear}
               onChange={e => setAddUserYear(e.target.value)}
@@ -1064,6 +1068,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
               ))}
             </select>
             <select
+              aria-label="Filter users by section"
                className=" px-3 py-2 mb-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
               value={addUserSection}
               onChange={e => setAddUserSection(e.target.value)}
@@ -1085,6 +1090,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                 <tr>
                   <th className="px-2">
                     <input
+                      aria-label="Select all users"
                       type="checkbox"
                       onChange={handleSelectAllUsers}
                       checked={selectedUsers.length === users.length && users.length > 0}
@@ -1106,6 +1112,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                   >
                     <td className="px-2 py-1 pl-5">
                       <input
+                        aria-label={`Select ${u.user_fname} ${u.user_lname}`}
                         type="checkbox"
                         checked={selectedUsers.includes(u.user_id)}
                         onChange={() => handleUserCheckbox(u.user_id)}
@@ -1147,6 +1154,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                 <tr>
                   <th className="px-0 pr-2">
                     <input
+                      aria-label="Select all fees"
                       type="checkbox"
                       onChange={handleSelectAllFees}
                       checked={selectedFees.length === feeRequirements.length && feeRequirements.length > 0}
@@ -1167,6 +1175,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                   >
                     <td className="px-4 py-2">
                       <input
+                        aria-label={`Select fee ${f.title}`}
                         type="checkbox"
                         checked={selectedFees.includes(f.requirement_id)}
                         onChange={() => handleFeeCheckbox(f.requirement_id)}
@@ -1246,7 +1255,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 </Modal>
 
         {/* ── Edit Transaction Modal ────────────────── */}
-        <Modal show={isEditOpen} onClose={() => setIsEditOpen(false)}>
+        <Modal dismissible show={isEditOpen} onClose={() => setIsEditOpen(false)}>
         <Modal.Header className="dark:bg-gray-800 rounded">Edit Transaction</Modal.Header>
         <Modal.Body className="dark:bg-gray-800 dark:text-white py-2 pb-6 rounded-lg">
         {editTxnId != null && (() => {
@@ -1363,7 +1372,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         </Modal>
 
         {/* ── Update Transaction Modal ────────────────── */}
-        <Modal show={isUpdateOpen} onClose={() => setIsUpdateOpen(false)}>
+        <Modal dismissible show={isUpdateOpen} onClose={() => setIsUpdateOpen(false)}>
         <Modal.Header className="dark:bg-gray-800 rounded">
           <div className="flex items-center">
             <svg className="w-5 h-5 mr-2 text-secondary-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
@@ -1534,7 +1543,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         )}
 
          {/* ── MASS EDIT Transaction Modal ────────────────── */}
-                <Modal show={isMassEditOpen} onClose={() => setIsMassEditOpen(false)} size="4xl">
+                <Modal dismissible show={isMassEditOpen} onClose={() => setIsMassEditOpen(false)} size="4xl">
                     <Modal.Header className="dark:bg-gray-800 rounded">
              <div className="flex items-center">
                   <svg className="w-5 h-5 mr-2 text-primary-600" fill="currentColor" viewBox="0 0 20 20">
@@ -1658,7 +1667,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                     </Modal>
 
                 {/* ── MASS EDIT CONFIRMATION ───────────────────────── */}
-                <Modal show={isMassConfirmOpen} onClose={() => setIsMassConfirmOpen(false)} size="lg">
+                <Modal dismissible show={isMassConfirmOpen} onClose={() => setIsMassConfirmOpen(false)} size="lg">
                 <Modal.Body className="p-4 text-center bg-white dark:bg-gray-800 rounded-lg shadow sm:p-5">
                 <button
                         onClick={() => setIsMassConfirmOpen(false)}
@@ -1743,7 +1752,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
                 </Modal>
 
                 {/* ── MASS DELETE CONFIRMATION ─────────────────────── */}
-<Modal show={isMassDeleteConfirmOpen} onClose={() => { setIsMassDeleteConfirmOpen(false); setMassDeleteReason(""); }} size="lg">
+<Modal dismissible show={isMassDeleteConfirmOpen} onClose={() => { setIsMassDeleteConfirmOpen(false); setMassDeleteReason(""); }} size="lg">
   <Modal.Header className="dark:bg-gray-800">Request Mass Transaction Deletion</Modal.Header>
   <Modal.Body className="dark:bg-gray-800 dark:text-white rounded">
     <form className="space-y-6 overflow-y-auto max-h-[70vh]">
@@ -1804,7 +1813,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
 </Modal>
 
         {/* ── MASS UPDATE MODAL ───────────────────────── */}
-        <Modal show={isMassUpdateOpen} onClose={() => setIsMassUpdateOpen(false)} size="4xl">
+        <Modal dismissible show={isMassUpdateOpen} onClose={() => setIsMassUpdateOpen(false)} size="4xl">
             <Modal.Header className="dark:bg-gray-800 rounded">
                 <div className="flex items-center">
                     <svg className="w-5 h-5 mr-2 text-secondary-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
@@ -1930,7 +1939,7 @@ const [addUserFilters,   setAddUserFilters]   = useState<{course:string;year:str
         </Modal>
 
         {/* ── MASS UPDATE CONFIRMATION ───────────────────────── */}
-        <Modal show={isMassUpdateConfirmOpen} onClose={() => setIsMassUpdateConfirmOpen(false)} size="lg">
+        <Modal dismissible show={isMassUpdateConfirmOpen} onClose={() => setIsMassUpdateConfirmOpen(false)} size="lg">
         <Modal.Body className="p-4 text-center bg-white dark:bg-gray-800 rounded-lg shadow sm:p-5">
         <button
                 onClick={() => setIsMassUpdateConfirmOpen(false)}

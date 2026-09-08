@@ -1,4 +1,5 @@
     <?php
+    require_once __DIR__ . '/bootstrap.php'; require_method('POST'); $actor=require_operator();
     // verify_qr_code.php
     ini_set('display_errors', 0);
     error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -13,7 +14,7 @@ require_once __DIR__ . '/cors.php';
         exit;
     }
 
-    session_start();
+    if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
     // Check authentication
     if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
@@ -44,16 +45,11 @@ require_once __DIR__ . '/cors.php';
     }
 
     try {
-        $pdo = new PDO(
-            "mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4",
-            "root",
-            "",
-            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-        );
+        $pdo = db();
 
         // Verify QR code and get user information
         $stmt = $pdo->prepare("
-            SELECT 
+            SELECT
                 uqr.user_id,
                 uqr.qr_code_data,
                 uqr.generated_at,
@@ -69,8 +65,8 @@ require_once __DIR__ . '/cors.php';
                 u.club_id
             FROM user_qr_codes uqr
             JOIN users u ON uqr.user_id = u.user_id
-            WHERE uqr.qr_code_data = ? 
-            AND uqr.is_active = 1 
+            WHERE uqr.qr_code_data = ?
+            AND uqr.is_active = 1
             AND uqr.club_id = ?
             AND u.club_id = ?
         ");
@@ -88,7 +84,7 @@ require_once __DIR__ . '/cors.php';
 
         // Get current active events for attendance options
         $stmt = $pdo->prepare("
-            SELECT 
+            SELECT
                 requirement_id,
                 title,
                 description,
@@ -96,9 +92,9 @@ require_once __DIR__ . '/cors.php';
                 end_datetime,
                 location,
                 status
-            FROM requirements 
-            WHERE club_id = ? 
-            AND requirement_type = 'event' 
+            FROM requirements
+            WHERE club_id = ?
+            AND requirement_type = 'event'
             AND status IN ('scheduled', 'ongoing')
             AND DATE(start_datetime) <= CURDATE()
             AND DATE(end_datetime) >= CURDATE()
@@ -111,26 +107,26 @@ require_once __DIR__ . '/cors.php';
         $eventsWithSlots = [];
         foreach ($activeEvents as $event) {
             $stmt = $pdo->prepare("
-                SELECT 
+                SELECT
                     slot_id,
                     slot_name,
                     start_time,
                     end_time,
                     date
-                FROM attendance_time_slots 
-                WHERE requirement_id = ? 
+                FROM attendance_time_slots
+                WHERE requirement_id = ?
                 AND is_active = 1
                 AND date = CURDATE()
                 ORDER BY start_time ASC
             ");
             $stmt->execute([$event['requirement_id']]);
             $timeSlots = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
+
             error_log("Event ID " . $event['requirement_id'] . " has " . count($timeSlots) . " time slots for today");
             if (!empty($timeSlots)) {
                 error_log("Time slots: " . json_encode($timeSlots));
             }
-            
+
             $event['time_slots'] = $timeSlots;
             $eventsWithSlots[] = $event;
         }
@@ -140,9 +136,9 @@ require_once __DIR__ . '/cors.php';
         if (!empty($activeEvents)) {
             $eventIds = array_column($activeEvents, 'requirement_id');
             $placeholders = str_repeat('?,', count($eventIds) - 1) . '?';
-            
+
             $stmt = $pdo->prepare("
-                SELECT 
+                SELECT
                     ar.attendance_id,
                     ar.user_id,
                     ar.requirement_id,
@@ -167,7 +163,7 @@ require_once __DIR__ . '/cors.php';
                 INNER JOIN requirements r ON ar.requirement_id = r.requirement_id
                 LEFT JOIN attendance_time_slots ts ON ar.slot_id = ts.slot_id
                 INNER JOIN users v ON ar.verified_by = v.user_id
-                WHERE ar.user_id = ? 
+                WHERE ar.user_id = ?
                 AND ar.requirement_id IN ($placeholders)
                 AND DATE(ar.scan_datetime) = CURDATE()
             ");
@@ -203,9 +199,11 @@ require_once __DIR__ . '/cors.php';
 
     } catch (PDOException $e) {
         http_response_code(500);
-        echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+        error_log('IMSCCA request failure: ' . $e->getMessage());
+        api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['error' => $e->getMessage()]);
+        error_log('IMSCCA request failure: ' . $e->getMessage());
+        api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
     }
-    ?> 
+    ?>

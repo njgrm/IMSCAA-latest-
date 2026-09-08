@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('POST'); $actor=require_roles('adviser');
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 require_once __DIR__ . '/cors.php';
@@ -12,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
     http_response_code(401);
     echo json_encode(['error' => 'Not authenticated']);
@@ -31,10 +32,10 @@ if ($request_ids && is_array($request_ids)) {
         $rid = (int)$rid;
         if (!$rid) continue;
         try {
-            $pdo = new PDO("mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4", "root", "", [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+            $pdo = db();
             $pdo->beginTransaction();
-            $stmt = $pdo->prepare("SELECT * FROM approval_requests WHERE request_id = ? FOR UPDATE");
-            $stmt->execute([$rid]);
+            $stmt = $pdo->prepare("SELECT * FROM approval_requests WHERE request_id = ? AND club_id = ? FOR UPDATE");
+            $stmt->execute([$rid, $actor['club_id']]);
             $req = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$req || $req['status'] !== 'pending') {
                 $pdo->rollBack();
@@ -43,9 +44,9 @@ if ($request_ids && is_array($request_ids)) {
             }
             $type = $req['type'];
             $target_id = (int)$req['target_id'];
-            $club_id = (int)$req['club_id'];
+            $club_id = (int)$actor['club_id'];
             $approval_type = $req['approval_type'] ?? 'delete'; // Use approval_type instead of request_type
-            
+
             // Handle different request types
             if ($approval_type === 'delete') {
                 // Handle deletion requests
@@ -102,18 +103,18 @@ if ($request_ids && is_array($request_ids)) {
             } else if ($approval_type === 'attendance_edit' && $type === 'attendance') {
                 // Handle attendance edit requests
                 $newData = null;
-                if (!empty($req['new_data'])) {
-                    if (is_string($req['new_data'])) {
-                        $newData = json_decode($req['new_data'], true);
+                if (!empty($req['edit_data'])) {
+                    if (is_string($req['edit_data'])) {
+                        $newData = json_decode($req['edit_data'], true);
                     } else {
-                        $newData = $req['new_data']; // Already decoded
+                        $newData = $req['edit_data'];
                     }
                 }
-                
+
                 if ($newData) {
                     $updateFields = [];
                     $updateValues = [];
-                    
+
                     if (isset($newData['attendance_status'])) {
                         $updateFields[] = "attendance_status = ?";
                         $updateValues[] = $newData['attendance_status'];
@@ -126,11 +127,11 @@ if ($request_ids && is_array($request_ids)) {
                         $updateFields[] = "scan_datetime = ?";
                         $updateValues[] = $newData['scan_datetime'];
                     }
-                    
+
                     if (!empty($updateFields)) {
                         $updateValues[] = $target_id;
                         $updateValues[] = $club_id;
-                        
+
                         $updateSql = "
                             UPDATE attendance_records ar
                             JOIN requirements r ON ar.requirement_id = r.requirement_id
@@ -142,15 +143,16 @@ if ($request_ids && is_array($request_ids)) {
                     }
                 }
             }
-            
-            $stmt = $pdo->prepare("UPDATE approval_requests SET status = 'approved', approved_by = ?, approved_at = NOW() WHERE request_id = ?");
-            $stmt->execute([$_SESSION['user_id'], $rid]);
+
+            $stmt = $pdo->prepare("UPDATE approval_requests SET status = 'approved', approved_by = ?, approved_at = NOW() WHERE request_id = ? AND club_id = ?");
+            $stmt->execute([$_SESSION['user_id'], $rid, $actor['club_id']]);
             $pdo->commit();
             $results[] = ['request_id' => $rid, 'success' => true];
             notify_deletion_status($club_id, $rid, 'approved', $type, $target_id, $req['requested_by'], $_SESSION['user_id'], date('Y-m-d H:i:s'));
         } catch (PDOException $e) {
             if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
-            $results[] = ['request_id' => $rid, 'error' => $e->getMessage()];
+            error_log('Approval request failure: ' . $e->getMessage());
+            $results[] = ['request_id' => $rid, 'error' => 'Request could not be completed.'];
         }
     }
     echo json_encode(['results' => $results]);
@@ -164,10 +166,10 @@ if (!$request_id) {
 }
 
 try {
-    $pdo = new PDO("mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4", "root", "", [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $pdo = db();
     $pdo->beginTransaction();
-    $stmt = $pdo->prepare("SELECT * FROM approval_requests WHERE request_id = ? FOR UPDATE");
-    $stmt->execute([$request_id]);
+    $stmt = $pdo->prepare("SELECT * FROM approval_requests WHERE request_id = ? AND club_id = ? FOR UPDATE");
+    $stmt->execute([$request_id, $actor['club_id']]);
     $req = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$req || $req['status'] !== 'pending') {
         $pdo->rollBack();
@@ -177,9 +179,9 @@ try {
     }
     $type = $req['type'];
     $target_id = (int)$req['target_id'];
-    $club_id = (int)$req['club_id'];
+    $club_id = (int)$actor['club_id'];
     $approval_type = $req['approval_type'] ?? 'delete'; // Use approval_type instead of request_type
-    
+
     // Handle different request types
     if ($approval_type === 'delete') {
         // Handle deletion requests
@@ -236,18 +238,18 @@ try {
     } else if ($approval_type === 'attendance_edit' && $type === 'attendance') {
         // Handle attendance edit requests
         $newData = null;
-        if (!empty($req['new_data'])) {
-            if (is_string($req['new_data'])) {
-                $newData = json_decode($req['new_data'], true);
+        if (!empty($req['edit_data'])) {
+            if (is_string($req['edit_data'])) {
+                $newData = json_decode($req['edit_data'], true);
             } else {
-                $newData = $req['new_data']; // Already decoded
+                $newData = $req['edit_data'];
             }
         }
-        
+
         if ($newData) {
             $updateFields = [];
             $updateValues = [];
-            
+
             if (isset($newData['attendance_status'])) {
                 $updateFields[] = "attendance_status = ?";
                 $updateValues[] = $newData['attendance_status'];
@@ -260,11 +262,11 @@ try {
                 $updateFields[] = "scan_datetime = ?";
                 $updateValues[] = $newData['scan_datetime'];
             }
-            
+
             if (!empty($updateFields)) {
                 $updateValues[] = $target_id;
                 $updateValues[] = $club_id;
-                
+
                 $updateSql = "
                     UPDATE attendance_records ar
                     JOIN requirements r ON ar.requirement_id = r.requirement_id
@@ -276,16 +278,17 @@ try {
             }
         }
     }
-    
-    $stmt = $pdo->prepare("UPDATE approval_requests SET status = 'approved', approved_by = ?, approved_at = NOW() WHERE request_id = ?");
-    $stmt->execute([$_SESSION['user_id'], $request_id]);
+
+    $stmt = $pdo->prepare("UPDATE approval_requests SET status = 'approved', approved_by = ?, approved_at = NOW() WHERE request_id = ? AND club_id = ?");
+    $stmt->execute([$_SESSION['user_id'], $request_id, $actor['club_id']]);
     $pdo->commit();
     echo json_encode(['success' => true]);
     notify_deletion_status($club_id, $request_id, 'approved', $type, $target_id, $req['requested_by'], $_SESSION['user_id'], date('Y-m-d H:i:s'));
 } catch (PDOException $e) {
     if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
     http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }
 
 // After updating the request to approved, notify via node server
@@ -303,8 +306,8 @@ function notify_deletion_status($clubId, $requestId, $status, $type, $targetId, 
     $ch = curl_init('http://localhost:3001/notify-deletion-request-status');
     curl_setopt($ch, CURLOPT_POST, 1);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, socket_service_headers());
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_exec($ch);
     curl_close($ch);
-} 
+}

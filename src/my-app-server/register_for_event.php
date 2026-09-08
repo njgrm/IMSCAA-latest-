@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('POST','DELETE'); $actor=require_roles('member');
 // register_for_event.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -13,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 // Check authentication
 if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
@@ -26,15 +27,13 @@ $userId = (int)$_SESSION['user_id'];
 $clubId = (int)$_SESSION['club_id'];
 
 try {
-    $pdo = new PDO("mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4", "root", "", [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
+    $pdo = db();
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $input = json_decode(file_get_contents('php://input'), true);
-        $eventId = isset($input['event_id']) ? (int)$input['event_id'] : 0;
+        $eventId = isset($input['event_id'])
+            ? (int)$input['event_id']
+            : (int)($input['requirement_id'] ?? 0);
 
         if (!$eventId) {
             http_response_code(400);
@@ -44,8 +43,8 @@ try {
 
         // Check if event exists and is an event type
         $stmt = $pdo->prepare("
-            SELECT requirement_id, title, requirement_type, status, end_datetime 
-            FROM requirements 
+            SELECT requirement_id, title, requirement_type, status, end_datetime
+            FROM requirements
             WHERE requirement_id = ? AND club_id = ? AND requirement_type = 'event'
         ");
         $stmt->execute([$eventId, $clubId]);
@@ -66,7 +65,7 @@ try {
 
         // Check if already registered
         $stmt = $pdo->prepare("
-            SELECT registration_id FROM event_registrations 
+            SELECT registration_id FROM event_registrations
             WHERE user_id = ? AND requirement_id = ?
         ");
         $stmt->execute([$userId, $eventId]);
@@ -75,11 +74,11 @@ try {
         if ($existing) {
             // Already registered - unregister
             $stmt = $pdo->prepare("
-                DELETE FROM event_registrations 
+                DELETE FROM event_registrations
                 WHERE user_id = ? AND requirement_id = ?
             ");
             $stmt->execute([$userId, $eventId]);
-            
+
             echo json_encode([
                 'success' => true,
                 'message' => 'Successfully unregistered from event',
@@ -88,11 +87,11 @@ try {
         } else {
             // Not registered - register
             $stmt = $pdo->prepare("
-                INSERT INTO event_registrations (user_id, requirement_id, registered_by, registered_at) 
+                INSERT INTO event_registrations (user_id, requirement_id, registered_by, registered_at)
                 VALUES (?, ?, ?, NOW())
             ");
             $stmt->execute([$userId, $eventId, $userId]);
-            
+
             echo json_encode([
                 'success' => true,
                 'message' => 'Successfully registered for event',
@@ -111,7 +110,7 @@ try {
 
         // Unregister user from the event
         $stmt = $pdo->prepare("
-            DELETE FROM event_registrations 
+            DELETE FROM event_registrations
             WHERE user_id = ? AND requirement_id = ?
         ");
         $stmt->execute([$userId, $eventId]);
@@ -124,7 +123,7 @@ try {
     } elseif ($_SERVER['REQUEST_METHOD'] === 'GET') {
         // Get user's registrations
         $stmt = $pdo->prepare("
-            SELECT 
+            SELECT
                 er.registration_id,
                 er.requirement_id,
                 er.registered_at,
@@ -157,4 +156,4 @@ try {
     http_response_code(500);
     echo json_encode(['error' => 'An error occurred while processing your request']);
 }
-?> 
+?>

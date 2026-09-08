@@ -1,27 +1,9 @@
 <?php
-session_start();
+require_once __DIR__ . '/bootstrap.php';
+require_method('POST');
+$actor = current_actor();
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
-
-// 1) CORS
-require_once __DIR__ . '/cors.php';
-header("Access-Control-Allow-Credentials: true");
-header("Access-Control-Allow-Headers: Content-Type");
-header("Access-Control-Allow-Methods: POST, OPTIONS");
-header("Content-Type: application/json; charset=utf-8");
-
-// 2) Preflight
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-  http_response_code(200);
-  exit;
-}
-
-// 3) Must be POST
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-  http_response_code(405);
-  echo json_encode(['error' => 'Only POST allowed']);
-  exit;
-}
 
 try {
   // 4) Unset all session variables
@@ -45,8 +27,8 @@ try {
   session_destroy();
 
   // 7) Return success
-  echo json_encode(['message' => 'Logged out successfully']);
+  echo json_encode(['success' => true, 'message' => 'Logged out successfully']);
 } catch (Exception $e) {
-  http_response_code(500);
-  echo json_encode(['error' => 'Server error']);
+  error_log('logout.php error: ' . $e->getMessage());
+  api_error(500, 'Unable to log out.', 'LOGOUT_FAILED');
 }

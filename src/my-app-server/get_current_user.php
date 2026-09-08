@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('GET'); $actor=current_actor();
 // get_current_user.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -14,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
   exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 // 1) Check authentication
 if (empty($_SESSION['user_id'])) {
@@ -29,18 +30,13 @@ $clubId = isset($_SESSION['club_id']) ? (int) $_SESSION['club_id'] : null;
 
 try {
   // 2) Connect
-  $pdo = new PDO(
-    "mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4",
-    "root",
-    "",
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-  );
+  $pdo = db();
 
   // 3) Query just the one user
   // Modified to include avatar and handle null club_id
   if ($clubId !== null) {
     $stmt = $pdo->prepare("
-    SELECT 
+    SELECT
       user_id,
       school_id,
       user_fname,
@@ -57,7 +53,7 @@ try {
     $stmt->execute([$userId, $clubId]);
   } else {
     $stmt = $pdo->prepare("
-      SELECT 
+      SELECT
         user_id,
         school_id,
         user_fname,
@@ -88,5 +84,6 @@ try {
 }
 catch (PDOException $e) {
   http_response_code(500);
-  echo json_encode(['error' => 'Database error: '.$e->getMessage()]);
-} 
+  error_log('IMSCCA request failure: ' . $e->getMessage());
+  api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
+}

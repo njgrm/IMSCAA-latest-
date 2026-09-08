@@ -1,4 +1,7 @@
 <?php
+require_once __DIR__ . '/bootstrap.php';
+require_method('POST');
+$actor = require_operator();
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 require_once __DIR__ . '/cors.php';
@@ -12,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 $input = json_decode(file_get_contents('php://input'), true);
 
@@ -66,13 +69,12 @@ if ($requirement_type === 'fee' && $amount_due <= 0) {
     exit;
 }
 
+if (strtotime($end_datetime) <= strtotime($start_datetime)) {
+    api_error(400, 'End date must be after start date.', 'INVALID_DATE_RANGE');
+}
+
 try {
-    $pdo = new PDO(
-        "mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4",
-        "root",
-        "",
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-    );
+    $pdo = db();
 
     $stmt = $pdo->prepare("
         INSERT INTO `requirements` (
@@ -113,5 +115,6 @@ try {
     echo json_encode(['requirements' => $requirements]);
 } catch (PDOException $e) {
     http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }

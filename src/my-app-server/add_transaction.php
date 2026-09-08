@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('POST'); $actor=require_operator();
 // add_transaction.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -15,7 +16,7 @@ require_once __DIR__ . '/cors.php';
 require_once __DIR__ . '/cors.php';
 header("Access-Control-Allow-Credentials: true");
 header("Content-Type: application/json");
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
     http_response_code(401);
@@ -33,8 +34,9 @@ $reqIds         = $input['requirement_ids'] ?? [];
 $feeDesc        = trim($input['fee_description'] ?? '');
 $amountPaid     = isset($input['amount_paid']) 
                   ? (float)$input['amount_paid'] : 0.0;
-$paymentStatus  = in_array($input['payment_status'], ['unpaid','partial','paid'])
-                  ? $input['payment_status'] : 'unpaid';
+$requestedStatus = $input['payment_status'] ?? 'unpaid';
+$paymentStatus  = in_array($requestedStatus, ['unpaid','partial','paid'], true)
+                  ? $requestedStatus : 'unpaid';
 $paymentMethod  = trim($input['payment_method'] ?? '');
 
 if (!is_array($userIds) || !count($userIds)
@@ -46,12 +48,24 @@ if (!is_array($userIds) || !count($userIds)
 }
 
 try {
-    $pdo = new PDO(
-      "mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4",
-      "root","",[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]
-    );
+    $pdo = db();
 
-    $inReq = implode(',', array_fill(0, count($reqIds), '?'));
+    $normalizedUserIds = array_values(array_unique(array_filter(array_map('intval', $userIds), static fn(int $id): bool => $id > 0)));
+    $normalizedReqIds = array_values(array_unique(array_filter(array_map('intval', $reqIds), static fn(int $id): bool => $id > 0)));
+    if (!$normalizedUserIds || count($normalizedUserIds) !== count(array_unique(array_map('intval', $userIds)))) {
+        api_error(400, 'Every selected user must be valid.', 'INVALID_USER_SELECTION');
+    }
+    if (!$normalizedReqIds || count($normalizedReqIds) !== count(array_unique(array_map('intval', $reqIds)))) {
+        api_error(400, 'Every selected requirement must be valid.', 'INVALID_REQUIREMENT_SELECTION');
+    }
+    $inUsers = implode(',', array_fill(0, count($normalizedUserIds), '?'));
+    $userStmt = $pdo->prepare("SELECT user_id FROM users WHERE club_id = ? AND user_id IN ($inUsers)");
+    $userStmt->execute(array_merge([$clubId], $normalizedUserIds));
+    if (count($userStmt->fetchAll(PDO::FETCH_COLUMN)) !== count($normalizedUserIds)) {
+        api_error(404, 'One or more selected users do not belong to this club.', 'USER_NOT_FOUND_IN_CLUB');
+    }
+
+    $inReq = implode(',', array_fill(0, count($normalizedReqIds), '?'));
     $stmt = $pdo->prepare("
       SELECT requirement_id,
              CAST(amount_due AS DECIMAL(10,2)) AS amount_due,
@@ -59,7 +73,7 @@ try {
       FROM requirements
       WHERE club_id = ? AND requirement_id IN ($inReq)
     ");
-    $stmt->execute(array_merge([ $clubId ], $reqIds));
+    $stmt->execute(array_merge([ $clubId ], $normalizedReqIds));
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $reqMap = [];
@@ -69,10 +83,13 @@ try {
         'end_datetime'=> $r['end_datetime']
       ];
     }
-    foreach($reqIds as $rid) {
+    foreach($normalizedReqIds as $rid) {
       if (!isset($reqMap[$rid])) {
-        throw new Exception("Requirement $rid not found");
+        api_error(404, 'One or more selected requirements do not belong to this club.', 'REQUIREMENT_NOT_FOUND_IN_CLUB');
       }
+    }
+    foreach ($reqMap as $requirement) {
+        validate_payment_state($amountPaid, $paymentStatus, (float)$requirement['amount_due']);
     }
 
     $pdo->beginTransaction();
@@ -88,9 +105,9 @@ try {
     ";
     $ins = $pdo->prepare($sql);
 
-    foreach ($userIds as $uid) {
+    foreach ($normalizedUserIds as $uid) {
       $u = (int)$uid;
-      foreach ($reqIds as $rid) {
+      foreach ($normalizedReqIds as $rid) {
         $r = (int)$rid;
         $ins->execute([
           ':user_id'     => $u,
@@ -114,5 +131,6 @@ try {
       $pdo->rollBack();
     }
     http_response_code(500);
-    echo json_encode(['error'=>'Server error: '.$e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }

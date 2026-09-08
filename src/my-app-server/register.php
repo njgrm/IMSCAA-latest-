@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/bootstrap.php';
+require_method('POST');
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 require_once __DIR__ . '/cors.php';
@@ -47,12 +48,7 @@ $clubName = trim($data['club']);
 $plainPw = $data['password'];
 
 try {
-  $pdo = new PDO(
-    "mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4",
-    "root",
-    "",
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-  );
+  $pdo = db();
 
   $baseUsername = strtolower($fname . '.' . $lname);
   $username = $baseUsername . rand(10, 99);
@@ -94,6 +90,12 @@ try {
     }
     $role = $invite['role'];
     $clubId = $invite['club_id'];
+    if (!empty($invite['target_school_id']) && strcasecmp($invite['target_school_id'], $school_id) !== 0) {
+      $pdo->rollBack(); http_response_code(409); echo json_encode(['success'=>false,'error'=>'School ID does not match this invitation.','code'=>'INVITE_IDENTITY_MISMATCH']); exit;
+    }
+    if (!empty($invite['target_email']) && strcasecmp($invite['target_email'], $email) !== 0) {
+      $pdo->rollBack(); http_response_code(409); echo json_encode(['success'=>false,'error'=>'Email does not match this invitation.','code'=>'INVITE_IDENTITY_MISMATCH']); exit;
+    }
     // Insert user
     $stmtUser = $pdo->prepare("
       INSERT INTO users (
@@ -124,6 +126,8 @@ try {
     // Increment used_count
     $pdo->prepare("UPDATE invite_links SET used_count = used_count + 1 WHERE id = ?")
       ->execute([$invite['id']]);
+    if (!empty($invite['import_row_id'])) $pdo->prepare("UPDATE member_import_rows SET status='registered' WHERE row_id=?")->execute([$invite['import_row_id']]);
+    audit_event($pdo, ['user_id'=>(int)$userId,'club_id'=>(int)$clubId,'role'=>strtolower($role)], 'account_registered', 'user', (int)$userId, (int)$userId);
     $pdo->commit();
     http_response_code(201);
     echo json_encode([
@@ -141,7 +145,7 @@ try {
     $ch = curl_init('http://localhost:3001/notify-registration');
     curl_setopt($ch, CURLOPT_POST, 1);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, socket_service_headers());
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_exec($ch);
     curl_close($ch);
@@ -190,6 +194,8 @@ try {
      WHERE club_id = ?
   ")->execute([$userId, $clubId]);
 
+  audit_event($pdo, ['user_id'=>(int)$userId,'club_id'=>(int)$clubId,'role'=>'adviser'], 'club_registered', 'club', (int)$clubId, (int)$userId);
+
   $pdo->commit();
 
   http_response_code(201);
@@ -208,12 +214,13 @@ try {
   $ch = curl_init('http://localhost:3001/notify-registration');
   curl_setopt($ch, CURLOPT_POST, 1);
   curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-  curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+  curl_setopt($ch, CURLOPT_HTTPHEADER, socket_service_headers());
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
   curl_exec($ch);
   curl_close($ch);
 } catch (PDOException $e) {
   if ($pdo->inTransaction()) $pdo->rollBack();
   http_response_code(500);
-  echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+  error_log('IMSCCA request failure: ' . $e->getMessage());
+  api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }

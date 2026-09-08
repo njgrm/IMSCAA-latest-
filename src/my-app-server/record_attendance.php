@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('POST'); $actor=require_operator();
 // record_attendance.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -13,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 // Check authentication
 if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
@@ -71,9 +72,9 @@ if (!in_array($attendanceStatus, $validStatuses)) {
 }
 
 try {
-    $pdo = new PDO("mysql:host=localhost;dbname=db_imscca", "root", "");
+    $pdo = db();
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    
+
     $reqStmt = $pdo->prepare("SELECT requirement_id, title FROM requirements WHERE requirement_id = ? AND club_id = ?");
     $reqStmt->execute([$requirementId, $clubId]);
     if (!$reqStmt->fetch()) {
@@ -101,8 +102,8 @@ try {
 
     try {
         $checkStmt = $pdo->prepare("
-            SELECT attendance_id 
-            FROM attendance_records 
+            SELECT attendance_id
+            FROM attendance_records
             WHERE user_id = ? AND requirement_id = ? AND slot_id " . ($slotId ? "= ?" : "IS NULL")
         );
         $checkParams = [$userIdToRecord, $requirementId];
@@ -114,15 +115,15 @@ try {
 
         if ($existingRecord) {
             $updateStmt = $pdo->prepare("
-                UPDATE attendance_records 
-                SET attendance_status = ?, notes = ?, scan_datetime = NOW(), verified_by = ? 
+                UPDATE attendance_records
+                SET attendance_status = ?, notes = ?, scan_datetime = NOW(), verified_by = ?
                 WHERE attendance_id = ?
             ");
             $updateStmt->execute([$attendanceStatus, $notes, $verifierUserId, $existingRecord['attendance_id']]);
             $attendanceId = $existingRecord['attendance_id'];
         } else {
             $insertStmt = $pdo->prepare("
-                INSERT INTO attendance_records 
+                INSERT INTO attendance_records
                 (user_id, requirement_id, slot_id, verified_by, club_id, attendance_status, notes)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             ");
@@ -131,7 +132,7 @@ try {
         }
 
         $resultStmt = $pdo->prepare("
-            SELECT 
+            SELECT
                 ar.attendance_id,
                 ar.user_id,
                 ar.requirement_id,
@@ -174,13 +175,15 @@ try {
             $pdo->rollBack();
         }
         http_response_code(500);
-        echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+        error_log('IMSCCA request failure: ' . $e->getMessage());
+        api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
         http_response_code(500);
-        echo json_encode(['error' => $e->getMessage()]);
+        error_log('IMSCCA request failure: ' . $e->getMessage());
+        api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
     }
 
 } catch (PDOException $e) {
@@ -188,12 +191,14 @@ try {
         $pdo->rollBack();
     }
     http_response_code(500);
-    echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 } catch (Exception $e) {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
     http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }
-?> 
+?>

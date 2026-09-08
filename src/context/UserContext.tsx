@@ -36,21 +36,29 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
 
   const fetchUser = async () => {
     try {
-      const res = await fetch('/my-app-server/get_current_user.php', { 
-        credentials: 'include' 
+      const res = await fetch('/my-app-server/get_current_user.php', {
+        credentials: 'include'
       });
-      
+
+      if (res.status === 401) {
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('userData');
+        setUser(null);
+        setUserRole(null);
+        return;
+      }
+
       if (!res.ok) {
         throw new Error('Failed to fetch user');
       }
-      
+
       const userData = await res.json();
-      
+
       if (userData && userData.user_id) {
         setUser(userData);
         const role = userData.role ? userData.role.toLowerCase() : null;
         setUserRole(role);
-        
+
         // Cache in localStorage
         localStorage.setItem('userRole', role || '');
         localStorage.setItem('userData', JSON.stringify(userData));
@@ -89,14 +97,14 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
     // Check localStorage first for cached data
     const cachedRole = localStorage.getItem('userRole');
     const cachedUserData = localStorage.getItem('userData');
-    
+
     if (cachedRole && cachedUserData) {
       try {
         const userData = JSON.parse(cachedUserData);
         setUser(userData);
         setUserRole(cachedRole);
         setIsLoading(false);
-        
+
         // Still refresh in background to ensure data is current
         fetchUser();
       } catch (error) {
@@ -130,4 +138,4 @@ export const useUser = (): UserContextType => {
     throw new Error('useUser must be used within a UserProvider');
   }
   return context;
-}; 
+};

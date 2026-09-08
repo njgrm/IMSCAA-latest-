@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('POST'); $actor=require_operator();
 require_once __DIR__ . '/cors.php';
 header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE");
@@ -16,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
     http_response_code(401);
     echo json_encode(['error' => 'Not authenticated']);
@@ -34,13 +35,24 @@ if (!in_array($type, $valid_types) || !$target_id) {
     echo json_encode(['error' => 'Invalid type or target_id']);
     exit;
 }
+if ($reason === '') api_error(400, 'A reason is required.', 'REASON_REQUIRED');
 
 try {
-    $pdo = new PDO("mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4", "root", "", [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $pdo = db();
+    $checks = [
+        'user' => 'SELECT user_id FROM users WHERE user_id = ? AND club_id = ?',
+        'requirement' => 'SELECT requirement_id FROM requirements WHERE requirement_id = ? AND club_id = ?',
+        'transaction' => 'SELECT t.transaction_id FROM transactions t JOIN requirements r ON r.requirement_id=t.requirement_id WHERE t.transaction_id = ? AND r.club_id = ?',
+        'club' => 'SELECT club_id FROM club WHERE club_id = ? AND club_id = ?',
+    ];
+    $target = $pdo->prepare($checks[$type]);
+    $target->execute([$target_id, $actor['club_id']]);
+    if (!$target->fetchColumn()) api_error(404, 'Target not found in this club.', 'TARGET_NOT_FOUND');
     $stmt = $pdo->prepare("INSERT INTO approval_requests (type, target_id, club_id, requested_by, reason) VALUES (?, ?, ?, ?, ?)");
     $stmt->execute([$type, $target_id, $_SESSION['club_id'], $_SESSION['user_id'], $reason]);
     echo json_encode(['success' => true]);
 } catch (PDOException $e) {
     http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('POST'); $actor=require_operator();
 // add_attendance_request.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -13,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 // Check authentication
 if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
@@ -62,45 +63,44 @@ if ($approvalType === 'attendance_edit' && !$newData) {
 }
 
 try {
-    $pdo = new PDO("mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4", "root", "", [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
+    $pdo = db();
 
     // Check if this is an attendance request and get original data
     $originalStatus = null;
     $requestedStatus = null;
     if ($type === 'attendance' || $approvalType === 'attendance_edit') {
+        $stmt = $pdo->prepare("
+            SELECT attendance_status FROM attendance_records
+            WHERE attendance_id = ? AND club_id = ?
+        ");
+        $stmt->execute([$targetId, $clubId]);
+        $currentRecord = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$currentRecord) {
+            api_error(404, 'Attendance record not found in this club.', 'ATTENDANCE_NOT_FOUND');
+        }
+
+        $originalStatus = $currentRecord['attendance_status'];
         if ($approvalType === 'attendance_edit' && $newData) {
-            // Get current attendance record
-            $stmt = $pdo->prepare("
-                SELECT attendance_status FROM attendance_records 
-                WHERE attendance_id = ? AND club_id = ?
-            ");
-            $stmt->execute([$targetId, $clubId]);
-            $currentRecord = $stmt->fetch();
-            
-            if ($currentRecord) {
-                $originalStatus = $currentRecord['attendance_status'];
-                $requestedStatus = $newData['attendance_status'] ?? $originalStatus;
+            $requestedStatus = $newData['attendance_status'] ?? $originalStatus;
+            if (!in_array($requestedStatus, ['present', 'late', 'excused', 'absent'], true)) {
+                api_error(400, 'Invalid attendance status.', 'INVALID_ATTENDANCE_STATUS');
             }
         }
-        
+
         // Convert type to standard approval request type
         $type = 'attendance';
     }
 
     // Insert the approval request
     $stmt = $pdo->prepare("
-        INSERT INTO approval_requests 
-        (type, approval_type, target_id, club_id, requested_by, reason, original_status, requested_status, attendance_record_id, new_data)
+        INSERT INTO approval_requests
+        (type, approval_type, target_id, club_id, requested_by, reason, original_status, requested_status, attendance_record_id, edit_data)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
-    
+
     $attendanceRecordId = ($type === 'attendance') ? $targetId : null;
     $newDataJson = $newData ? json_encode($newData) : null;
-    
+
     $stmt->execute([
         $type,
         $approvalType,
@@ -122,9 +122,11 @@ try {
 
 } catch (PDOException $e) {
     http_response_code(500);
-    echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 } catch (Exception $e) {
     http_response_code(500);
-    echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }
-?> 
+?>

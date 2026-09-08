@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/bootstrap.php';
+require_method('GET');
 require_once __DIR__ . '/cors.php';
 header("Access-Control-Allow-Headers: Content-Type");
 header("Access-Control-Allow-Methods: GET, OPTIONS");
@@ -22,9 +24,10 @@ if (!$token) {
 }
 
 try {
-  $pdo = new PDO("mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4", "root", "", [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+  $pdo = db();
   $stmt = $pdo->prepare("
-    SELECT i.role, i.club_id, c.club_name, i.expiry, i.allowed_signups, i.used_count
+    SELECT i.role, i.club_id, c.club_name, i.expiry, i.allowed_signups, i.used_count,
+           i.target_school_id, i.target_email
     FROM invite_links i
     JOIN club c ON i.club_id = c.club_id
     WHERE i.token = ?
@@ -49,7 +52,9 @@ try {
     'valid' => true,
     'role' => $invite['role'],
     'club_id' => $invite['club_id'],
-    'club_name' => $invite['club_name']
+    'club_name' => $invite['club_name'],
+    'target_school_id' => $invite['target_school_id'],
+    'target_email' => $invite['target_email']
   ]);
 } catch (PDOException $e) {
   echo json_encode(['valid' => false, 'error' => 'Server error']);

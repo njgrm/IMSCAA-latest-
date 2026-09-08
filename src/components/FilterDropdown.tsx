@@ -108,6 +108,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
           {/* Course / Year / Section */}
           <div className="grid grid-cols-1 gap-2">
             <select
+              aria-label="Filter by course"
               value={filters.course}
               onChange={e => setFilters(f => ({ ...f, course: e.target.value }))}
               className="p-2 border rounded-lg text-sm bg-gray-50 focus:ring-primary-400 focus:border-primary-400 dark:bg-gray-600 dark:border-gray-500 dark:text-white border-gray-300"
@@ -123,7 +124,8 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
             </select>
 
             <select
-                value={filters.year}
+              aria-label="Filter by year"
+              value={filters.year}
                 onChange={e => setFilters(f => ({ ...f, year: e.target.value }))}
                 className="p-2 border rounded-lg text-sm bg-gray-50 focus:ring-primary-400 focus:border-primary-400 dark:bg-gray-600 dark:border-gray-500 dark:text-white border-gray-300"
                 >
@@ -138,6 +140,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
             </select>
 
             <select
+              aria-label="Filter by section"
               value={filters.section}
               onChange={e => setFilters(f => ({ ...f, section: e.target.value }))}
               className="p-2 border rounded-lg text-sm bg-gray-50 focus:ring-primary-400 focus:border-primary-400  dark:bg-gray-600 dark:border-gray-500 dark:text-white border-gray-300"

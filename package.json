@@ -5,8 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:tunnel": "vite --mode tunnel --host 0.0.0.0",
+    "dev:socket": "node src/server.cjs",
+    "dev:all": "node scripts/dev-all.cjs",
+    "dev:all:tunnel": "node scripts/dev-all.cjs --tunnel",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:api": "node tests/api-security-qa.mjs",
+    "test:release": "node tests/release-qa.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -18,8 +24,8 @@
     "express": "^5.1.0",
     "flowbite-react": "^0.10.2",
     "html2canvas": "^1.4.1",
-    "jspdf": "^3.0.1",
-    "jspdf-autotable": "^5.0.2",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "motion": "^12.9.2",
     "qr-scanner": "^1.4.2",
     "qrcode": "^1.5.4",
@@ -45,6 +51,7 @@
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^15.15.0",
+    "playwright": "^1.62.1",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.7.2",

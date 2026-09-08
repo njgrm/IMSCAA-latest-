@@ -62,6 +62,8 @@ const MemberDashboard: React.FC = () => {
   const [userId, setUserId] = useState<number | null>(null);
   const [userName, setUserName] = useState<string>('');
   const [clubId, setClubId] = useState<number | null>(null);
+  const [registeredEvents, setRegisteredEvents] = useState<Set<number>>(new Set());
+  const [registrationBusy, setRegistrationBusy] = useState<number | null>(null);
 
   useEffect(() => {
     fetch('/my-app-server/get_current_user.php', { credentials: 'include' })
@@ -107,7 +109,36 @@ const MemberDashboard: React.FC = () => {
         setTimeSlots(upcomingSlots);
       })
       .catch(error => console.error('Error fetching time slots:', error));
+
+    fetch('/my-app-server/get_event_registrations.php', { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => setRegisteredEvents(new Set(Array.isArray(data) ? data.map(item => Number(item.requirement_id)) : [])))
+      .catch(error => console.error('Error fetching event registrations:', error));
   }, [userId, clubId]);
+
+  const toggleEventRegistration = async (eventId: number) => {
+    setRegistrationBusy(eventId);
+    try {
+      const response = await fetch('/my-app-server/register_for_event.php', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: eventId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Unable to update registration');
+      setRegisteredEvents(previous => {
+        const next = new Set(previous);
+        if (data.action === 'registered') next.add(eventId); else next.delete(eventId);
+        return next;
+      });
+      toast.success(data.message);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to update registration');
+    } finally {
+      setRegistrationBusy(null);
+    }
+  };
 
   const fetchQRCode = async () => {
     if (!userId) return;
@@ -200,11 +231,11 @@ const MemberDashboard: React.FC = () => {
             {/* Total Paid Card */}
             <div className="bg-gradient-to-r from-green-500 to-green-600 p-6 rounded-lg shadow text-white hover:shadow-lg transition-all duration-200 transform hover:scale-105">
               <div className="flex items-center justify-between">
-                <div>
+                           <div>
                   <h2 className="text-sm font-medium text-green-100">Total Paid</h2>
                   <p className="mt-1 text-3xl font-bold">
                     {loading ? (
-                      <div className="animate-pulse bg-green-300 h-8 w-20 rounded"></div>
+                      <span className="inline-block animate-pulse bg-green-300 h-8 w-20 rounded" />
                     ) : (
                       `₱${latestTxns.reduce((sum, tx) => sum + (typeof tx.amount_paid === 'number' ? tx.amount_paid : parseFloat(tx.amount_paid as any) || 0), 0).toFixed(0)}`
                     )}
@@ -225,7 +256,7 @@ const MemberDashboard: React.FC = () => {
                   <h2 className="text-sm font-medium text-yellow-100">Pending</h2>
                   <p className="mt-1 text-3xl font-bold">
                     {loading ? (
-                      <div className="animate-pulse bg-yellow-300 h-8 w-16 rounded"></div>
+                      <span className="inline-block animate-pulse bg-yellow-300 h-8 w-16 rounded" />
                     ) : (
                       latestTxns.filter(p => p.payment_status === 'unpaid' || p.payment_status === 'partial').length
                     )}
@@ -246,7 +277,7 @@ const MemberDashboard: React.FC = () => {
                   <h2 className="text-sm font-medium text-emerald-100">Completed</h2>
                   <p className="mt-1 text-3xl font-bold">
                     {loading ? (
-                      <div className="animate-pulse bg-emerald-300 h-8 w-16 rounded"></div>
+                      <span className="inline-block animate-pulse bg-emerald-300 h-8 w-16 rounded" />
                     ) : (
                       latestTxns.filter(p => p.payment_status === 'paid').length
                     )}
@@ -267,7 +298,7 @@ const MemberDashboard: React.FC = () => {
                   <h2 className="text-sm font-medium text-orange-100">Upcoming Events</h2>
                   <p className="mt-1 text-3xl font-bold">
                     {loading ? (
-                      <div className="animate-pulse bg-orange-300 h-8 w-16 rounded"></div>
+                      <span className="inline-block animate-pulse bg-orange-300 h-8 w-16 rounded" />
                     ) : (
                       eventRequirements.length
                     )}
@@ -424,7 +455,7 @@ const MemberDashboard: React.FC = () => {
                           
                           {/* Status Badge */}
                           <div>
-                            <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${
+                             <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${
                               tx.payment_status === 'paid' ? 'bg-green-900 text-green-300' :
                               tx.payment_status === 'partial' ? 'bg-yellow-900 text-yellow-300' :
                               'bg-red-900 text-red-300'
@@ -532,9 +563,19 @@ const MemberDashboard: React.FC = () => {
                               ev.status === 'ongoing' ? 'bg-green-900 text-green-300' :
                               'bg-gray-700 text-gray-300'
                             }`}>
-                              {ev.status}
-                            </span>
-                          </div>
+                               {ev.status}
+                             </span>
+                           </div>
+                           <button
+                             type="button"
+                             disabled={registrationBusy === ev.requirement_id}
+                             onClick={() => void toggleEventRegistration(ev.requirement_id)}
+                             className="mt-3 w-full rounded bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:cursor-wait disabled:opacity-60"
+                           >
+                             {registrationBusy === ev.requirement_id
+                               ? 'Updating...'
+                               : registeredEvents.has(ev.requirement_id) ? 'Cancel registration' : 'Register for event'}
+                           </button>
                         </div>
                       </div>
                     );

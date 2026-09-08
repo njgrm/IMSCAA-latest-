@@ -6,11 +6,12 @@ interface SearchbarProps {
 }
 
 const Searchbar: React.FC<SearchbarProps> = ({ search, onSearchChange }) => {
+  const searchId = React.useId();
   return (
     <div className="mr-6 flex flex-col md:flex-row items-stretch md:items-center md:space-x-3 space-y-3 md:space-y-0 justify-between w-full py-4">
       <div className="w-full md:w-96 sm:w-1/2 flex items-center justify-between">
         <div className="flex items-center w-full">
-          <label htmlFor="simple-search" className="sr-only">Search</label>
+          <label htmlFor={searchId} className="sr-only">Search</label>
           <div className="relative w-full">
             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
             <svg aria-hidden="true" className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -19,7 +20,7 @@ const Searchbar: React.FC<SearchbarProps> = ({ search, onSearchChange }) => {
             </div>
             <input
               type="text"
-              id="simple-search"
+              id={searchId}
               placeholder="Search..."
               value={search}
               onChange={e => onSearchChange(e.target.value)}

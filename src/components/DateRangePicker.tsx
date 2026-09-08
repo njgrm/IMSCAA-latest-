@@ -29,6 +29,7 @@ export default function DateRangePicker({ value, onChange }: Props) {
           ref={ref}
           value={value || ""}
           placeholder={placeholder}
+          aria-label={placeholder}
           readOnly
         />
       </div>

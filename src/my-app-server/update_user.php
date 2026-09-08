@@ -1,4 +1,7 @@
 <?php
+require_once __DIR__ . '/bootstrap.php';
+require_method('POST');
+$actor = require_operator();
 // update_user.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -39,6 +42,7 @@ $mname = trim($input['mname'] ?? '');
 $lname = trim($input['lname'] ?? '');
 $email   = trim($input['email'] ?? '');
 $role = trim($input['role'] ?? '');
+if (strtolower($role) !== 'member' && $actor['role'] !== 'adviser') api_error(403, 'Only advisers can assign privileged roles.', 'ROLE_CHANGE_FORBIDDEN');
 $course  = trim($input['course'] ?? '');
 $year    = trim($input['year'] ?? '');
 $section = trim($input['section'] ?? '');
@@ -51,10 +55,10 @@ if (!$fname || !$lname || !$school_id || !$email || !$role) {
 }
 
 try {
-    $pdo = new PDO("mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4", "root", "", [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $pdo = db();
 
-    $stmt = $pdo->prepare("SELECT club_id FROM `users` WHERE user_id = ?");
-    $stmt->execute([$user_id]);
+    $stmt = $pdo->prepare("SELECT club_id, role FROM `users` WHERE user_id = ? AND club_id = ?");
+    $stmt->execute([$user_id, $actor['club_id']]);
     $existingUser  = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$existingUser ) {
@@ -63,36 +67,41 @@ try {
         exit;
     }
 
+    if ($actor['role'] !== 'adviser' && strtolower((string)$existingUser['role']) !== 'member') {
+        api_error(403, 'Only advisers can modify privileged accounts.', 'PRIVILEGED_ACCOUNT_FORBIDDEN');
+    }
+
     $club_id = (int)$existingUser ['club_id'];
+    if (strtolower((string)$existingUser['role']) === 'adviser' && $user_id !== $actor['user_id']) api_error(403, 'Adviser accounts cannot be edited here.', 'ADVISER_EDIT_FORBIDDEN');
 
     $stmt = $pdo->prepare("
     UPDATE `users`
-      SET user_fname = ?, 
-          user_mname = ?, 
-          user_lname = ?, 
-          school_id = ?, 
-          email = ?, 
-          role = ?, 
-          user_course = ?, 
-          user_year = ?, 
-          user_section = ?, 
+      SET user_fname = ?,
+          user_mname = ?,
+          user_lname = ?,
+          school_id = ?,
+          email = ?,
+          role = ?,
+          user_course = ?,
+          user_year = ?,
+          user_section = ?,
           avatar = ?
     WHERE user_id = ? AND club_id = ?
   ");
-  
+
   $stmt->execute([
-    $fname,     
-    $mname,      
-    $lname,        
-    $school_id,    
-    $email,      
-    $role,        
-    $course,     
-    $year,       
-    $section,   
-    $avatar,      
-    $user_id,   
-    $club_id      
+    $fname,
+    $mname,
+    $lname,
+    $school_id,
+    $email,
+    $role,
+    $course,
+    $year,
+    $section,
+    $avatar,
+    $user_id,
+    $club_id
   ]);
 
     $stmt2 = $pdo->prepare("SELECT * FROM `users` WHERE club_id = ?");
@@ -102,5 +111,6 @@ try {
     echo json_encode(['users' => $users]);
 } catch (PDOException $e) {
     http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
-}   
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
+}

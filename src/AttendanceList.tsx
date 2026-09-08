@@ -30,6 +30,7 @@ interface AttendanceRecord {
   section: string;
   avatar?: string;
   event_title: string;
+  requirement_type: 'event' | 'activity';
   slot_name?: string;
   start_time?: string;
   end_time?: string;
@@ -265,9 +266,7 @@ const AttendanceList: React.FC = () => {
       }
 
    
-      if (Object.values(filters.eventTypes).some(Boolean)) {
- 
-      }
+      if (Object.values(filters.eventTypes).some(Boolean) && !filters.eventTypes[record.requirement_type]) return false;
 
       // Status filter
       if (Object.values(filters.statuses).some(Boolean) && !filters.statuses[record.attendance_status]) return false;
@@ -712,18 +711,18 @@ const AttendanceList: React.FC = () => {
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {filteredRecords.map(record => (
                       <tr key={record.attendance_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                        <td data-label="Student" className="px-2 sm:px-4 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
+                        <td data-label="Student" className="px-2 sm:px-4 py-4">
+                          <div className="flex min-w-0 items-center">
                             <img
                               className="h-8 w-8 sm:h-10 sm:w-10 rounded-full object-cover"
                               src={record.avatar || placeholderImage}
                               alt={`${record.user_fname} ${record.user_lname}`}
                             />
-                            <div className="ml-2 sm:ml-3">
+                            <div className="ml-2 min-w-0 sm:ml-3">
                               <div className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">
                                 {record.user_fname} {record.user_lname}
                               </div>
-                              <div className="text-xs text-gray-500 dark:text-gray-300">
+                              <div className="break-words text-xs text-gray-500 dark:text-gray-300">
                                 {record.school_id} • {record.course} {record.year}-{record.section}
                               </div>
                             </div>
@@ -768,6 +767,7 @@ const AttendanceList: React.FC = () => {
                         <td data-label="Actions" className="px-2 sm:px-4 pl-0 py-4 whitespace-nowrap text-center">
                           <div className="flex items-center justify-left space-x-2">
                             <button
+                              aria-label={`Preview attendance for ${record.user_fname} ${record.user_lname}`}
                               onClick={() => openDetailModal(record)}
                               className="py-1 pt-2 pb-2 px-2 sm:px-3 flex items-center text-xs sm:text-sm font-medium text-center text-gray-900 focus:outline-none bg-white rounded-lg border border-gray-200 hover:bg-gray-100 hover:text-primary-400 focus:z-10 focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700 transition-transform duration-200 ease-in-out transform hover:scale-105"
                             >
@@ -780,6 +780,7 @@ const AttendanceList: React.FC = () => {
 
                             {/* Request Edit Button */} 
                             <button
+                              aria-label={`Edit attendance for ${record.user_fname} ${record.user_lname}`}
                               onClick={() => requestEdit(record)}
                               className="py-1 pt-2 pb-2 px-2 sm:px-3 flex items-center text-xs sm:text-sm font-medium text-center text-white bg-primary-600 rounded-lg hover:bg-primary-400 focus:z-10 focus:ring-4 focus:ring-primary-300 dark:bg-primary-600 dark:hover:bg-primary-400 transition-transform duration-200 ease-in-out transform hover:scale-105"
                             >
@@ -792,6 +793,7 @@ const AttendanceList: React.FC = () => {
 
                             {/* Request Delete Button */}
                             <button
+                              aria-label={`Delete attendance for ${record.user_fname} ${record.user_lname}`}
                               onClick={() => requestDeletion(record)}
                               className="flex items-center justify-center px-4 py-2 text-sm border border-red-500 text-red-500 rounded-lg hover:bg-red-50  dark:hover:bg-red-900 whitespace-nowrap transition-transform duration-200 ease-in-out transform hover:scale-105"
                               >
@@ -838,7 +840,7 @@ const AttendanceList: React.FC = () => {
 
         {/* Detail Modal */}
         {selectedRecord && (
-          <Modal show={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)}>
+          <Modal dismissible show={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)}>
             <Modal.Header className="dark:bg-gray-800">
               Attendance Record Details
             </Modal.Header>
@@ -921,7 +923,7 @@ const AttendanceList: React.FC = () => {
         )}
 
         {/* Direct Edit Modal (Advisers Only) */}
-        <Modal show={isDirectEditModalOpen} onClose={() => setIsDirectEditModalOpen(false)}>
+        <Modal dismissible show={isDirectEditModalOpen} onClose={() => setIsDirectEditModalOpen(false)}>
           <Modal.Header className="dark:bg-gray-800">
             Edit Attendance Record
           </Modal.Header>
@@ -1005,7 +1007,7 @@ const AttendanceList: React.FC = () => {
         </Modal>
 
         {/* Request Modal */}
-        <Modal show={isRequestModalOpen} onClose={() => setIsRequestModalOpen(false)}>
+        <Modal dismissible show={isRequestModalOpen} onClose={() => setIsRequestModalOpen(false)}>
           <Modal.Header className="dark:bg-gray-800">
             Request {requestType === 'delete' ? 'Deletion' : 'Edit'} for Attendance Record
           </Modal.Header>
@@ -1160,7 +1162,7 @@ const AttendanceList: React.FC = () => {
         </Modal>
 
         {/* Delete Confirmation Modal */}
-        <Modal show={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)}>
+        <Modal dismissible show={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)}>
           <Modal.Header className="dark:bg-gray-800">
             Confirm Deletion
           </Modal.Header>

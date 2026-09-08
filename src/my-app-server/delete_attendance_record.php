@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('DELETE'); $actor=require_roles('adviser');
 require_once __DIR__ . '/cors.php';
 header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS, PUT, DELETE");
@@ -10,7 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
     http_response_code(401);
@@ -22,12 +23,7 @@ $currentUserId = (int)$_SESSION['user_id'];
 $currentClubId = (int)$_SESSION['club_id'];
 
 try {
-    $pdo = new PDO(
-        "mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4",
-        "root",
-        "",
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-    );
+    $pdo = db();
 
     // Get attendance_id from query parameter
     if (!isset($_GET['attendance_id']) || empty($_GET['attendance_id'])) {
@@ -105,10 +101,12 @@ try {
 } catch (PDOException $e) {
     error_log("Database error in delete_attendance_record.php: " . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 } catch (Exception $e) {
     error_log("Error in delete_attendance_record.php: " . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }
-?> 
+?>

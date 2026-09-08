@@ -1,4 +1,7 @@
 <?php
+require_once __DIR__ . '/bootstrap.php';
+require_method('GET');
+$actor = current_actor();
 // get_transaction.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -19,7 +22,7 @@ require_once __DIR__ . '/cors.php';
 header("Access-Control-Allow-Credentials: true");
 header("Content-Type: application/json");
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 // 3) Auth check
 if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
@@ -31,15 +34,11 @@ $clubId = (int) $_SESSION['club_id'];
 
 // 4) Get filters
 $userId = isset($_GET['user_id']) ? (int)$_GET['user_id'] : null;
+$userId = $actor['role'] === 'member' ? $actor['user_id'] : $userId;
 $type = isset($_GET['type']) ? $_GET['type'] : null;
 
 try {
-    $pdo = new PDO(
-        "mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4",
-        "root",
-        "",
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-    );
+    $pdo = db();
 
     $sql = "
         SELECT
@@ -83,5 +82,6 @@ try {
 
 } catch (PDOException $e) {
     http_response_code(500);
-    echo json_encode(['error' => 'Database error: '.$e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }

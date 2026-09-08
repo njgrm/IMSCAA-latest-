@@ -1,4 +1,8 @@
 <?php
+require_once __DIR__ . '/bootstrap.php';
+require_method('POST');
+$actor = require_operator();
+api_error(410, 'Direct account creation has been retired. Create a member invitation instead.', 'DIRECT_ACCOUNT_CREATION_RETIRED');
 // add_user.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -13,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 // Parse JSON input
 $input = json_decode(file_get_contents('php://input'), true);
@@ -30,6 +34,7 @@ $lname = trim($input['lname'] ?? '');
 $school_id = trim($input['school_id'] ?? '');
 $email = trim($input['email'] ?? '');
 $role = $input['role'] ?? 'Member';
+if (strtolower((string)$role) !== 'member') api_error(403, 'Use an adviser-authorized role change for privileged roles.', 'PRIVILEGED_ROLE_FORBIDDEN');
 $course = trim($input['course'] ?? '');
 $year = trim($input['year'] ?? '');
 $section = trim($input['section'] ?? '');
@@ -47,12 +52,7 @@ $username = strtolower($fname . '.' . $lname . rand(10, 99));
 $passwordHash = password_hash('ChangeMe123!', PASSWORD_BCRYPT);
 
 try {
-    $pdo = new PDO(
-        "mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4",
-        "root",
-        "",
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-    );
+    $pdo = db();
 
     // A School ID may belong to multiple clubs, but only once within this club.
     $duplicateStmt = $pdo->prepare("SELECT user_id FROM `users` WHERE club_id = ? AND school_id = ? LIMIT 1");

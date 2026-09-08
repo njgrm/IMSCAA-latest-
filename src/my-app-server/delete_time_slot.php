@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('POST','DELETE'); $actor=require_roles('adviser');
 // delete_time_slot.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -13,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 // Check authentication
 if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
@@ -60,29 +61,22 @@ if ($slotId <= 0) {
 }
 
 try {
-    $pdo = new PDO("mysql:host=localhost;dbname=db_imscca", "root", "");
+    $pdo = db();
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-    // Debug: Check table structure
-    error_log("Checking table structure for attendance_time_slots");
-    $descStmt = $pdo->prepare("DESCRIBE attendance_time_slots");
-    $descStmt->execute();
-    $columns = $descStmt->fetchAll(PDO::FETCH_ASSOC);
-    error_log("Table columns: " . json_encode($columns));
 
     // Verify that the time slot exists and belongs to the user's club
     $checkSql = "
-        SELECT ts.slot_id, ts.slot_name, r.title, r.club_id 
+        SELECT ts.slot_id, ts.slot_name, r.title, r.club_id
         FROM attendance_time_slots ts
         INNER JOIN requirements r ON ts.requirement_id = r.requirement_id
         WHERE ts.slot_id = :slot_id AND r.club_id = :club_id
     ";
-    
+
     $checkStmt = $pdo->prepare($checkSql);
     $checkStmt->bindParam(':slot_id', $slotId, PDO::PARAM_INT);
     $checkStmt->bindParam(':club_id', $clubId, PDO::PARAM_INT);
     $checkStmt->execute();
-    
+
     if ($checkStmt->rowCount() === 0) {
         http_response_code(404);
         echo json_encode(['error' => 'Time slot not found or access denied']);
@@ -93,15 +87,15 @@ try {
 
     // Check if there are any attendance records for this time slot
     $attendanceCheckSql = "
-        SELECT COUNT(*) as record_count 
-        FROM attendance_records 
+        SELECT COUNT(*) as record_count
+        FROM attendance_records
         WHERE slot_id = :slot_id
     ";
-    
+
     $attendanceStmt = $pdo->prepare($attendanceCheckSql);
     $attendanceStmt->bindParam(':slot_id', $slotId, PDO::PARAM_INT);
     $attendanceStmt->execute();
-    
+
     $attendanceResult = $attendanceStmt->fetch(PDO::FETCH_ASSOC);
     $hasRecords = $attendanceResult['record_count'] > 0;
 
@@ -141,12 +135,14 @@ try {
         $pdo->rollback();
         throw $e;
     }
-    
+
 } catch (PDOException $e) {
     http_response_code(500);
-    echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 } catch (Exception $e) {
     http_response_code(500);
-    echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }
-?> 
+?>

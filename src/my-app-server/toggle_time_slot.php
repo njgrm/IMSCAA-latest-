@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('POST'); $actor=require_operator();
 // toggle_time_slot.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -13,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 // Check authentication
 if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
@@ -55,24 +56,24 @@ $slotId = (int)$input['slot_id'];
 $isActive = (bool)$input['is_active'];
 
 try {
-    $pdo = new PDO("mysql:host=localhost;dbname=db_imscca", "root", "");
+    $pdo = db();
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     // Verify that the time slot belongs to the user's club
     $checkSql = "
-        SELECT ts.slot_id, ts.slot_name, ts.is_active, r.title 
+        SELECT ts.slot_id, ts.slot_name, ts.is_active, r.title
         FROM attendance_time_slots ts
         INNER JOIN requirements r ON ts.requirement_id = r.requirement_id
-        WHERE ts.slot_id = :slot_id 
-          AND r.club_id = :club_id 
+        WHERE ts.slot_id = :slot_id
+          AND r.club_id = :club_id
           AND r.requirement_type = 'event'
     ";
-    
+
     $checkStmt = $pdo->prepare($checkSql);
     $checkStmt->bindParam(':slot_id', $slotId, PDO::PARAM_INT);
     $checkStmt->bindParam(':club_id', $clubId, PDO::PARAM_INT);
     $checkStmt->execute();
-    
+
     if ($checkStmt->rowCount() === 0) {
         http_response_code(404);
         echo json_encode(['error' => 'Time slot not found or access denied']);
@@ -98,20 +99,20 @@ try {
 
     // Update the time slot status
     $updateSql = "
-        UPDATE attendance_time_slots 
+        UPDATE attendance_time_slots
         SET is_active = :is_active
         WHERE slot_id = :slot_id
     ";
-    
+
     $updateStmt = $pdo->prepare($updateSql);
     $updateStmt->bindParam(':is_active', $isActive, PDO::PARAM_BOOL);
     $updateStmt->bindParam(':slot_id', $slotId, PDO::PARAM_INT);
-    
+
     $updateStmt->execute();
-    
+
     // Return the updated time slot
     $returnSql = "
-        SELECT 
+        SELECT
             ts.slot_id,
             ts.requirement_id,
             ts.slot_name,
@@ -125,31 +126,33 @@ try {
         INNER JOIN requirements r ON ts.requirement_id = r.requirement_id
         WHERE ts.slot_id = :slot_id
     ";
-    
+
     $returnStmt = $pdo->prepare($returnSql);
     $returnStmt->bindParam(':slot_id', $slotId, PDO::PARAM_INT);
     $returnStmt->execute();
-    
+
     $updatedSlot = $returnStmt->fetch(PDO::FETCH_ASSOC);
-    
+
     // Convert types
     $updatedSlot['slot_id'] = (int)$updatedSlot['slot_id'];
     $updatedSlot['requirement_id'] = (int)$updatedSlot['requirement_id'];
     $updatedSlot['is_active'] = (bool)$updatedSlot['is_active'];
-    
+
     $statusText = $isActive ? 'enabled' : 'disabled';
-    
+
     echo json_encode([
         'success' => true,
         'message' => "Time slot {$statusText} successfully",
         'time_slot' => $updatedSlot
     ]);
-    
+
 } catch (PDOException $e) {
     http_response_code(500);
-    echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 } catch (Exception $e) {
     http_response_code(500);
-    echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }
-?> 
+?>

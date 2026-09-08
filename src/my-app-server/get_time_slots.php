@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('GET'); $actor=current_actor();
 // get_time_slots.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -13,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 // Check authentication
 if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
@@ -25,12 +26,12 @@ if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
 $clubId = (int)$_SESSION['club_id'];
 
 try {
-    $pdo = new PDO("mysql:host=localhost;dbname=db_imscca", "root", "");
+    $pdo = db();
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     // Build the SQL query
     $sql = "
-        SELECT 
+        SELECT
             ts.slot_id,
             ts.requirement_id,
             ts.slot_name,
@@ -61,28 +62,30 @@ try {
     $sql .= " ORDER BY ts.date ASC, ts.start_time ASC";
 
     $stmt = $pdo->prepare($sql);
-    
+
     foreach ($params as $param => $value) {
         $stmt->bindValue($param, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
     }
-    
+
     $stmt->execute();
     $slots = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
+
     // Convert numeric fields to proper types
     foreach ($slots as &$slot) {
         $slot['slot_id'] = (int)$slot['slot_id'];
         $slot['requirement_id'] = (int)$slot['requirement_id'];
         $slot['is_active'] = (bool)$slot['is_active'];
     }
-    
+
     echo json_encode($slots);
-    
+
 } catch (PDOException $e) {
     http_response_code(500);
-    echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 } catch (Exception $e) {
     http_response_code(500);
-    echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }
-?> 
+?>

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('POST'); $actor=require_operator();
 // add_requirement_with_registrations.php
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
@@ -13,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 // Check authentication
 if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
@@ -32,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $userId = (int)$_SESSION['user_id'];
 $clubId = (int)$_SESSION['club_id'];
 
-// Check if user has permission 
+// Check if user has permission
 $userRole = strtolower($_SESSION['role'] ?? '');
 if (!in_array($userRole, ['adviser', 'president', 'officer'])) {
     http_response_code(403);
@@ -41,14 +42,10 @@ if (!in_array($userRole, ['adviser', 'president', 'officer'])) {
 }
 
 try {
-    $pdo = new PDO("mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4", "root", "", [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
+    $pdo = db();
 
     $input = json_decode(file_get_contents('php://input'), true);
-    
+
     if ($input === null) {
         http_response_code(400);
         echo json_encode(['error' => 'Invalid JSON input']);
@@ -102,6 +99,10 @@ try {
         exit;
     }
 
+    if (strtotime($endDatetime) <= strtotime($startDatetime)) {
+        api_error(400, 'End date must be after start date.', 'INVALID_DATE_RANGE');
+    }
+
     if (in_array($requirementType, ['event', 'activity']) && empty($selectedUsers)) {
         http_response_code(400);
         echo json_encode(['error' => 'Please select at least one user for this event/activity']);
@@ -113,11 +114,11 @@ try {
     try {
         $stmt = $pdo->prepare("
             INSERT INTO requirements (
-                title, description, start_datetime, end_datetime, location, 
+                title, description, start_datetime, end_datetime, location,
                 requirement_type, status, club_id, amount_due, req_picture
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
-        
+
         $stmt->execute([
             $title, $description, $startDatetime, $endDatetime, $location,
             $requirementType, $status, $clubId, $amountDue, $reqPicture
@@ -129,8 +130,8 @@ try {
         // If this is an event or activity with selected users, register
         if (in_array($requirementType, ['event', 'activity']) && !empty($selectedUsers)) {
             $stmt = $pdo->prepare("
-                SELECT user_id, role FROM users 
-                WHERE user_id IN (" . implode(',', array_fill(0, count($selectedUsers), '?')) . ") 
+                SELECT user_id, role FROM users
+                WHERE user_id IN (" . implode(',', array_fill(0, count($selectedUsers), '?')) . ")
                 AND club_id = ?
             ");
             $params = array_merge($selectedUsers, [$clubId]);
@@ -144,7 +145,7 @@ try {
 
             if (!empty($eligibleUsers)) {
                 $insertStmt = $pdo->prepare("
-                    INSERT INTO event_registrations (user_id, requirement_id, registered_by, registered_at) 
+                    INSERT INTO event_registrations (user_id, requirement_id, registered_by, registered_at)
                     VALUES (?, ?, ?, NOW())
                 ");
 
@@ -189,10 +190,12 @@ try {
 } catch (PDOException $e) {
     error_log("Database error in add_requirement_with_registrations.php: " . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 } catch (Exception $e) {
     error_log("Error in add_requirement_with_registrations.php: " . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['error' => 'An error occurred: ' . $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }
-?> 
+?>

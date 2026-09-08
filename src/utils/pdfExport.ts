@@ -1,11 +1,6 @@
-// Note: You need to install these packages first:
-// npm install jspdf jspdf-autotable html2canvas
-
-// import jsPDF from 'jspdf';
-// import autoTable from 'jspdf-autotable';
-// import html2canvas from 'html2canvas';
-
-// For now, we'll create a basic implementation that can be enhanced once packages are installed
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import html2canvas from 'html2canvas';
 
 export interface ExportData {
   title: string;
@@ -20,87 +15,14 @@ export interface ExportData {
 
 export const exportToPDF = async (data: ExportData) => {
   try {
-    // This is a placeholder - will need actual jsPDF implementation
-    console.log('PDF Export Data:', data);
-    
-    // Create a temporary implementation using browser print
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      throw new Error('Could not open print window');
-    }
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${data.title}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .statistics { margin-bottom: 30px; }
-            .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
-            .stat-card { padding: 15px; border: 1px solid #ddd; border-radius: 5px; text-align: center; }
-            .stat-value { font-size: 24px; font-weight: bold; color: #059669; }
-            .stat-label { font-size: 14px; color: #666; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #f2f2f2; font-weight: bold; }
-            tr:nth-child(even) { background-color: #f9f9f9; }
-            .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>${data.title}</h1>
-            ${data.subtitle ? `<h2>${data.subtitle}</h2>` : ''}
-            <p>Generated on: ${new Date().toLocaleString()}</p>
-          </div>
-          
-          <div class="statistics">
-            <h3>Summary Statistics</h3>
-            <div class="stat-grid">
-              ${Object.entries(data.statistics).map(([key, value]) => `
-                <div class="stat-card">
-                  <div class="stat-value">${value}</div>
-                  <div class="stat-label">${key}</div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-
-          <div class="table-section">
-            <h3>Detailed Data</h3>
-            <table>
-              <thead>
-                <tr>
-                  ${data.tableHeaders.map(header => `<th>${header}</th>`).join('')}
-                </tr>
-              </thead>
-              <tbody>
-                ${data.tableData.map(row => `
-                  <tr>
-                    ${row.map(cell => `<td>${cell}</td>`).join('')}
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-
-          <div class="footer">
-            <p>This report was generated automatically from the IMSCCA Management System</p>
-          </div>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    
-    // Wait a bit for content to load then trigger print
-    setTimeout(() => {
-      printWindow.print();
-    }, 1000);
-
+    const pdf = new jsPDF({orientation: data.tableHeaders.length > 6 ? 'landscape' : 'portrait'});
+    pdf.setFontSize(18); pdf.text(String(data.title), 14, 18);
+    if(data.subtitle){pdf.setFontSize(11);pdf.text(String(data.subtitle),14,26)}
+    pdf.setFontSize(9);pdf.text(`Generated: ${new Date().toLocaleString()}`,14,34);
+    let y=42; for(const [key,value] of Object.entries(data.statistics)){pdf.text(`${String(key)}: ${String(value)}`,14,y);y+=6}
+    autoTable(pdf,{head:[data.tableHeaders.map(String)],body:data.tableData.map(row=>row.map(cell=>String(cell))),startY:y+2,theme:'grid',styles:{fontSize:8},headStyles:{fillColor:[5,150,105]}});
+    if(data.chartElements?.length){for(const element of data.chartElements){const canvas=await html2canvas(element,{backgroundColor:'#ffffff'});pdf.addPage();pdf.addImage(canvas.toDataURL('image/png'),'PNG',14,20,180,(canvas.height*180)/canvas.width)}}
+    const filename=`${data.title.replace(/[^a-z0-9]+/gi,'_').replace(/^_|_$/g,'').toLowerCase()||'imscca_report'}.pdf`;pdf.save(filename);
     return true;
   } catch (error) {
     console.error('PDF export error:', error);
@@ -181,4 +103,4 @@ export const exportToPDFAdvanced = async (data: ExportData) => {
   
   // Fallback to basic version
   return exportToPDF(data);
-}; 
+};

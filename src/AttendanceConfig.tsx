@@ -5,6 +5,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Searchbar from "./components/Searchbar";
 import Breadcrumb, { BreadcrumbItem } from './components/Breadcrumb';
+import { useUser } from './context/UserContext';
 
 interface Event {
   requirement_id: number;
@@ -65,6 +66,7 @@ const formatTimeForInput = (time: string): string => {
 };
 
 const AttendanceConfig: React.FC = () => {
+  const { userRole } = useUser();
   const [events, setEvents] = useState<Event[]>([]);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -493,12 +495,14 @@ const AttendanceConfig: React.FC = () => {
                             >
                               {slot.is_active ? 'Disable' : 'Enable'}
                             </button>
-                            <button
-                              onClick={() => openDeleteModal(slot)}
-                              className="px-3 py-1 text-xs font-medium text-red-600 bg-red-100 rounded hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800"
-                            >
-                              Delete
-                            </button>
+                            {userRole === 'adviser' && (
+                              <button
+                                onClick={() => openDeleteModal(slot)}
+                                className="px-3 py-1 text-xs font-medium text-red-600 bg-red-100 rounded hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800"
+                              >
+                                Delete
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))
@@ -531,7 +535,7 @@ const AttendanceConfig: React.FC = () => {
         </div>
 
         {/* Add Time Slot Modal */}
-        <Modal show={isAddSlotModalOpen} onClose={() => setIsAddSlotModalOpen(false)}>
+        <Modal dismissible show={isAddSlotModalOpen} onClose={() => setIsAddSlotModalOpen(false)}>
           <Modal.Header className="dark:bg-gray-800">
             Add Time Slot for {selectedEvent?.title}
           </Modal.Header>
@@ -616,7 +620,7 @@ const AttendanceConfig: React.FC = () => {
         </Modal>
 
         {/* Edit Time Slot Modal */}
-        <Modal show={isEditSlotModalOpen} onClose={() => setIsEditSlotModalOpen(false)}>
+        <Modal dismissible show={isEditSlotModalOpen} onClose={() => setIsEditSlotModalOpen(false)}>
           <Modal.Header className="dark:bg-gray-800">
             Edit Time Slot
           </Modal.Header>
@@ -700,7 +704,7 @@ const AttendanceConfig: React.FC = () => {
         </Modal>
 
         {/* Delete Confirmation Modal */}
-        <Modal show={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)}>
+        <Modal dismissible show={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)}>
           <Modal.Body className="p-4 text-center bg-white dark:bg-gray-800 rounded-lg shadow sm:p-5">
             <button
               onClick={() => setIsDeleteModalOpen(false)}

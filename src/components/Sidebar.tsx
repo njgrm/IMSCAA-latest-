@@ -91,7 +91,6 @@ const navItems: NavItem[] = [
       </svg>
     ),
     sub: [
-      { to: '/reports/clearance',       label: 'Clearance Completion' },
       { to: '/reports/attendance-report',label: 'Event Attendance' },
       { to: '/reports/transaction-report', label: 'Transactional Fees' },
     ]
@@ -134,7 +133,7 @@ const Sidebar: React.FC = () => {
     let shouldOpenReports = false;
     let shouldOpenAttendance = false;
     
-    for (let itm of filteredNavItems) {
+    for (const itm of filteredNavItems) {
       if (itm.sub) {
         const sub = itm.sub.find(s => pathname.startsWith(s.to));
         if (sub) { 

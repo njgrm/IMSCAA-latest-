@@ -10,7 +10,7 @@ header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 // Unset all of the session variables.
 $_SESSION = [];

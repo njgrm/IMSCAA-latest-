@@ -320,7 +320,7 @@ const Dashboard: React.FC = () => {
   const fetchAdminMetrics = async () => {
     try {
       // First try to get admin metrics from dedicated endpoint
-      let response = await fetch('/my-app-server/get_admin_metrics.php', {
+      const response = await fetch('/my-app-server/get_admin_metrics.php', {
         credentials: 'include'
       });
       
@@ -475,7 +475,7 @@ const Dashboard: React.FC = () => {
                       <h2 className="text-sm font-medium text-blue-100">Total Members</h2>
                       <p className="mt-1 text-3xl font-bold">
                         {metricsLoading ? (
-                          <div className="animate-pulse bg-blue-300 h-8 w-16 rounded"></div>
+                          <span className="inline-block animate-pulse bg-blue-300 h-8 w-16 rounded" />
                         ) : (
                           totalMembers
                         )}
@@ -499,7 +499,7 @@ const Dashboard: React.FC = () => {
                       <h2 className="text-sm font-medium text-green-100">Total Transactions</h2>
                       <p className="mt-1 text-3xl font-bold">
                         {metricsLoading ? (
-                          <div className="animate-pulse bg-green-300 h-8 w-16 rounded"></div>
+                          <span className="inline-block animate-pulse bg-green-300 h-8 w-16 rounded" />
                         ) : (
                           totalTransactions
                         )}
@@ -523,7 +523,7 @@ const Dashboard: React.FC = () => {
                       <h2 className="text-sm font-medium text-orange-100">Pending Payments</h2>
                       <p className="mt-1 text-3xl font-bold">
                         {metricsLoading ? (
-                          <div className="animate-pulse bg-orange-300 h-8 w-16 rounded"></div>
+                          <span className="inline-block animate-pulse bg-orange-300 h-8 w-16 rounded" />
                         ) : (
                           pendingPayments
                         )}
@@ -547,7 +547,7 @@ const Dashboard: React.FC = () => {
                       <h2 className="text-sm font-medium text-purple-100">Attendance Rate</h2>
                       <p className="mt-1 text-3xl font-bold">
                         {metricsLoading ? (
-                          <div className="animate-pulse bg-purple-300 h-8 w-16 rounded"></div>
+                          <span className="inline-block animate-pulse bg-purple-300 h-8 w-16 rounded" />
                         ) : (
                           `${attendanceRate.toFixed(1)}%`
                         )}
@@ -571,7 +571,7 @@ const Dashboard: React.FC = () => {
                       <h2 className="text-sm font-medium text-green-100">Total Paid</h2>
                       <p className="mt-1 text-3xl font-bold">
                         {memberStatsLoading ? (
-                          <div className="animate-pulse bg-green-300 h-8 w-20 rounded"></div>
+                          <span className="inline-block animate-pulse bg-green-300 h-8 w-20 rounded" />
                         ) : (
                           `₱${myTotalPaid.toFixed(0)}`
                         )}
@@ -592,7 +592,7 @@ const Dashboard: React.FC = () => {
                       <h2 className="text-sm font-medium text-blue-100">My Payments</h2>
                       <p className="mt-1 text-3xl font-bold">
                         {memberStatsLoading ? (
-                          <div className="animate-pulse bg-blue-300 h-8 w-16 rounded"></div>
+                          <span className="inline-block animate-pulse bg-blue-300 h-8 w-16 rounded" />
                         ) : (
                           latestMyPayments.length
                         )}
@@ -613,7 +613,7 @@ const Dashboard: React.FC = () => {
                       <h2 className="text-sm font-medium text-yellow-100">Pending</h2>
                       <p className="mt-1 text-3xl font-bold">
                         {memberStatsLoading ? (
-                          <div className="animate-pulse bg-yellow-300 h-8 w-16 rounded"></div>
+                          <span className="inline-block animate-pulse bg-yellow-300 h-8 w-16 rounded" />
                         ) : (
                           latestMyPayments.filter(p => p.payment_status === 'unpaid' || p.payment_status === 'partial').length
                         )}
@@ -634,7 +634,7 @@ const Dashboard: React.FC = () => {
                       <h2 className="text-sm font-medium text-emerald-100">Completed</h2>
                       <p className="mt-1 text-3xl font-bold">
                         {memberStatsLoading ? (
-                          <div className="animate-pulse bg-emerald-300 h-8 w-16 rounded"></div>
+                          <span className="inline-block animate-pulse bg-emerald-300 h-8 w-16 rounded" />
                         ) : (
                           latestMyPayments.filter(p => p.payment_status === 'paid').length
                         )}
@@ -655,7 +655,7 @@ const Dashboard: React.FC = () => {
                       <h2 className="text-sm font-medium text-purple-100">Events Attended</h2>
                       <p className="mt-1 text-3xl font-bold">
                         {memberStatsLoading ? (
-                          <div className="animate-pulse bg-purple-300 h-8 w-16 rounded"></div>
+                          <span className="inline-block animate-pulse bg-purple-300 h-8 w-16 rounded" />
                         ) : (
                           myAttendanceCount
                         )}
@@ -679,7 +679,7 @@ const Dashboard: React.FC = () => {
                       <h2 className="text-sm font-medium text-orange-100">Upcoming Events</h2>
                       <p className="mt-1 text-3xl font-bold">
                         {memberStatsLoading ? (
-                          <div className="animate-pulse bg-orange-300 h-8 w-16 rounded"></div>
+                          <span className="inline-block animate-pulse bg-orange-300 h-8 w-16 rounded" />
                         ) : (
                           myUpcomingEvents
                         )}

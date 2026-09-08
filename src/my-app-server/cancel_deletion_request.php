@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('POST'); $actor=require_operator();
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 require_once __DIR__ . '/cors.php';
@@ -18,15 +19,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-session_start();
-function get_pdo() {
-    return new PDO(
-        "mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4",
-        "root",
-        "",
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-    );
-}
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
+function get_pdo() { return db(); }
 
 $user_id = $_SESSION['user_id'] ?? null;
 if (!$user_id) {
@@ -47,8 +41,8 @@ if (!$request_id) {
 try {
     $pdo = get_pdo();
     // Only allow cancel if user is the requester and status is pending
-    $stmt = $pdo->prepare("DELETE FROM approval_requests WHERE request_id=? AND requested_by=? AND status='pending'");
-    $stmt->execute([$request_id, $user_id]);
+    $stmt = $pdo->prepare("DELETE FROM approval_requests WHERE request_id=? AND requested_by=? AND club_id=? AND status='pending'");
+    $stmt->execute([$request_id, $user_id, $actor['club_id']]);
     if ($stmt->rowCount() > 0) {
         echo json_encode(['success' => true]);
     } else {
@@ -57,5 +51,6 @@ try {
     }
 } catch (Exception $e) {
     http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
-} 
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
+}

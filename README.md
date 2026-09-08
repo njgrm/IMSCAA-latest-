@@ -1,57 +1,61 @@
-# React + TypeScript + Vite
+# IMSCCA
 
-## Project Description
-This is a test project demonstrating file editing capabilities. The application is built with React, TypeScript, and Vite for a modern development experience.
+IMSCCA is a club operations system for member invitations, requirements, fees, approvals, attendance, QR check-in, history, and operational reports.
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Local startup
 
-Currently, two official plugins are available:
+1. Start Apache and MySQL from XAMPP.
+2. Deploy the canonical PHP backend: `powershell -ExecutionPolicy Bypass -File scripts/deploy-backend.ps1`.
+3. Start the frontend and notification server together: `npm run dev:all`.
+4. Open `http://localhost:5173`.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+The individual development commands remain available:
 
-## Expanding the ESLint configuration
+- `npm run dev` starts Vite on port 5173.
+- `npm run dev:socket` starts Socket.IO on port 3001.
+- `npm run dev:tunnel` starts Vite for a forwarded port without its unsupported HMR WebSocket.
+- `npm run dev:all:tunnel` starts both Socket.IO and tunnel-mode Vite.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Vite proxies `/my-app-server` to XAMPP Apache and `/socket.io` to port 3001. Generated registration links therefore use the current localhost or Dev Tunnel origin.
+Tunnel mode disables only Vite hot reload; IMSCCA Socket.IO notifications remain enabled.
+The combined launcher requires ports `5173` and `3001` to be free and exits with a clear message instead of silently starting duplicate processes on another port.
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+## Database
+
+- Clean installation: import `db_imscca/db_imscca.sql`.
+- Existing installation: back up the database, then apply migrations in `db_imscca/migrations` in filename order.
+- Optional environment variables: `IMSCCA_DB_HOST`, `IMSCCA_DB_NAME`, `IMSCCA_DB_USER`, `IMSCCA_DB_PASSWORD`, `IMSCCA_TIMEZONE`, and `IMSCCA_SESSION_PATH`.
+
+The default XAMPP configuration uses database `db_imscca`, user `root`, a blank password, and timezone `Asia/Manila`.
+
+## Event lifecycle
+
+Run the idempotent worker manually:
+
+```powershell
+D:\XAMPP\php\php.exe src\my-app-server\lifecycle_worker.php
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Install the one-minute Windows scheduled task from an elevated PowerShell terminal:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install-lifecycle-task.ps1
+```
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+## Member imports
+
+CSV files must be UTF-8 and use this exact header:
+
+```csv
+school_id,email,first_name,middle_name,last_name,course,year,section
+```
+
+Preview validates every row. Commit creates identity-bound, one-time member registration links and never creates shared passwords.
+
+## Verification
+
+```powershell
+npm run build
+npm run lint
+Get-ChildItem src\my-app-server\*.php | ForEach-Object { D:\XAMPP\php\php.exe -l $_.FullName }
 ```

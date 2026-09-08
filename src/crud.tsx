@@ -22,6 +22,8 @@ import Breadcrumb, { BreadcrumbItem } from './components/Breadcrumb';
 import { ThemeContext } from './theme/ThemeContext';
 import GenerateInviteDropdown from "./components/GenerateInviteDropdown";
 import QRCodeDisplay from './components/QRCodeDisplay';
+import MemberImportModal from './components/MemberImportModal';
+import InviteMemberModal from './components/InviteMemberModal';
 
 
 
@@ -65,6 +67,9 @@ interface QRCodeData {
 const Crud: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [createdInviteLink, setCreatedInviteLink] = useState('');
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
@@ -212,7 +217,7 @@ const Crud: React.FC = () => {
     if (!form.section.trim()) return toast.error("Section is required!");
 
     try {
-        const res = await fetch("/my-app-server/add_user.php", {
+        const res = await fetch("/my-app-server/create_member_invite.php", {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
@@ -222,11 +227,6 @@ const Crud: React.FC = () => {
                 lname: form.lname,
                 school_id: form.school_id,
                 email: form.email,
-                role: form.role,
-                course: form.course,
-                year: form.year,
-                section: form.section,
-                avatar: form.avatar,
             }),
         });
 
@@ -239,10 +239,9 @@ const Crud: React.FC = () => {
         }
 
         if (res.ok) {
-            toast.success("Student added successfully!"); // Success message
-            setIsAddOpen(false);
-            setForm(emptyForm);
-            await fetchUsers();
+            const absoluteLink = new URL(data.link, window.location.origin).toString();
+            setCreatedInviteLink(absoluteLink);
+            toast.success("Member invitation created.");
         } else {
             toast.error(`Add failed: ${data.error || "Unknown error"}`); // Error message
             console.error("Add failed:", data);
@@ -608,19 +607,18 @@ const Crud: React.FC = () => {
         {currentUserRole !== 'Member' && (
           <Button
             onClick={() => {
-              setForm(emptyForm);
-              if (currentUserRole === 'Officer') setForm(f => ({ ...f, role: 'Member' }));
-              setIsAddOpen(true);
+              setIsInviteOpen(true);
             }}
             className="bg-primary-600 py-1 hover:bg-primary-700 text-white dark:bg-primary-600 dark:hover:bg-primary-400 rounded-lg shadow-md transition-colors duration-200 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-opacity-50 text-xs sm:text-sm px-3 sm:px-4"
           >
             <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
               <path fillRule="evenodd" d="M9 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm-2 9a4 4 0 0 0-4 4v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1a4 4 0 0 0-4-4H7Zm8-1a1 1 0 0 1 1-1h1v-1a1 1 0 1 1 2 0v1h1a1 1 0 1 1 0 2h-1v1a1 1 0 1 1-2 0v-1h-1a1 1 0 0 1-1-1Z" clipRule="evenodd"/>
             </svg>
-            <span className="hidden sm:inline">Add Member</span>
-            <span className="sm:hidden">Add</span>
+            <span className="hidden sm:inline">Invite Member</span>
+            <span className="sm:hidden">Invite</span>
           </Button>
         )}
+        <Button onClick={()=>setIsImportOpen(true)} className="bg-gray-700 text-white"><span>Import CSV</span></Button>
         <div className="relative">
           <FilterDropdown
             isOpen={showFilter}
@@ -674,9 +672,8 @@ const Crud: React.FC = () => {
                 const target = (s.role || '').toLowerCase();
                 const canEditOrDelete = (() => {
                   if (current === 'adviser') return true;
-                  if (current === 'president') {
-                    if (target === 'adviser') return false;
-                    return true;
+                   if (current === 'president') {
+                    return target === 'member';
                   }
                   if (current === 'officer') {
                     if (target === 'adviser' || target === 'president' || target === 'officer') return false;
@@ -696,7 +693,7 @@ const Crud: React.FC = () => {
                     <td data-label="School ID" className="px-4 py-3 text-gray-600 dark:text-gray-300">
                       {s.school_id}
                     </td>
-                    <td data-label="Name" className="px-4 py-3 align-middle">
+                    <td data-label="Name" className="min-w-[11rem] px-4 py-3 align-middle">
                       <div className="flex items-center">
                         <img
                          src={s.avatar || placeholderImage}
@@ -826,6 +823,8 @@ const Crud: React.FC = () => {
       )}
 
       {/* ——— ADD MODAL ——— */}
+      <MemberImportModal open={isImportOpen} onClose={()=>setIsImportOpen(false)}/>
+      <InviteMemberModal open={isInviteOpen} onClose={()=>setIsInviteOpen(false)}/>
 <Modal
         show={isAddOpen}
         onClose={() => {
@@ -838,10 +837,11 @@ const Crud: React.FC = () => {
             <svg className="w-6 h-6 mr-2 ml-1 text-primary-600" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
               <path fillRule="evenodd" d="M9 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm-2 9a4 4 0 0 0-4 4v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1a4 4 0 0 0-4-4H7Zm8-1a1 1 0 0 1 1-1h1v-1a1 1 0 1 1 2 0v1h1a1 1 0 1 1 0 2h-1v1a1 1 0 1 1-2 0v-1h-1a1 1 0 0 1-1-1Z" clipRule="evenodd"/>
             </svg>
-                    Add New Member
+                    Invite New Member
                 </div>
   </Modal.Header>
   <Modal.Body className="dark:bg-gray-800 dark:text-white rounded">
+    {createdInviteLink && <div className="mb-4 rounded border border-primary-500 p-3"><p className="mb-2 text-sm">Share this one-time registration link with the member:</p><div className="flex gap-2"><input readOnly value={createdInviteLink} className="min-w-0 flex-1 rounded border p-2 text-gray-900"/><button type="button" onClick={()=>navigator.clipboard.writeText(createdInviteLink)} className="rounded bg-primary-600 px-3 text-white">Copy</button></div></div>}
     <form onSubmit={addStudent} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {/* School ID */}
       <div className="sm:col-span-2">
@@ -1007,7 +1007,7 @@ const Crud: React.FC = () => {
 </Modal>
 
 {/* ——— EDIT MODAL ——— */}
-<Modal show={isEditOpen} onClose={() => setIsEditOpen(false)}>
+<Modal dismissible show={isEditOpen} onClose={() => setIsEditOpen(false)}>
   <Modal.Header className="dark:bg-gray-800">Edit Student</Modal.Header>
   <Modal.Body className="dark:bg-gray-800 dark:text-white rounded">
     <form onSubmit={saveEdit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1171,7 +1171,7 @@ const Crud: React.FC = () => {
 
       {/* ——— DELETE MODAL ——— */}
       {(currentUserRole || '').toLowerCase() === 'adviser' ? (
-        <Modal show={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }} size="lg">
+        <Modal dismissible show={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }} size="lg">
           <Modal.Body className="p-4 text-center bg-white dark:bg-gray-800 rounded-lg shadow sm:p-5">
             <button
               onClick={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}
@@ -1206,7 +1206,7 @@ const Crud: React.FC = () => {
           </Modal.Body>
         </Modal>
       ) : (
-        <Modal show={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}>
+        <Modal dismissible show={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setDeleteReason(""); }}>
           <Modal.Header className="dark:bg-gray-800">Request Member Deletion</Modal.Header>
           <Modal.Body className="dark:bg-gray-800 dark:text-white rounded">
             {userToDelete && (() => {

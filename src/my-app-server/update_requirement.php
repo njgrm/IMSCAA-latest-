@@ -1,4 +1,7 @@
 <?php
+require_once __DIR__ . '/bootstrap.php';
+require_method('POST');
+$actor = require_operator();
 // update_requirement.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -13,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 $input = json_decode(file_get_contents('php://input'), true);
 
@@ -50,13 +53,15 @@ if (!$requirement_id || !$title || !$description || !$start_datetime || !$end_da
     exit;
 }
 
+if (strtotime($end_datetime) <= strtotime($start_datetime)) {
+    api_error(400, 'End date must be after start date.', 'INVALID_DATE_RANGE');
+}
+if ($requirement_type === 'fee' && $amount_due <= 0) {
+    api_error(400, 'Amount due must be positive for fee requirements.', 'INVALID_AMOUNT_DUE');
+}
+
 try {
-    $pdo = new PDO(
-        "mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4",
-        "root",
-        "",
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-    );
+    $pdo = db();
 
     // Update requirement
     $stmt = $pdo->prepare("
@@ -104,5 +109,6 @@ try {
 
 } catch (PDOException $e) {
     http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }

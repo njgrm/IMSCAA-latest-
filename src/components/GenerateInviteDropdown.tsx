@@ -9,10 +9,9 @@ const DEFAULT_EXPIRY_HOURS = 24;
 
 const GenerateInviteDropdown: React.FC<GenerateInviteDropdownProps> = ({ userRole }) => {
   const [open, setOpen] = useState(false);
-  // Allow adviser to generate adviser, president, officer, member; default adviser
-  // President: officer, member; Officer: member
+  // Advisers assign privileged roles; presidents and officers invite members only.
   const [role, setRole] = useState<"adviser" | "president" | "officer" | "member">(
-    userRole === "Adviser" ? "adviser" : userRole === "President" ? "officer" : "member"
+    userRole === "Adviser" ? "president" : "member"
   );
   const [allowed, setAllowed] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -20,9 +19,8 @@ const GenerateInviteDropdown: React.FC<GenerateInviteDropdownProps> = ({ userRol
   const [expiry, setExpiry] = useState(DEFAULT_EXPIRY_HOURS); // in hours
   const [expiryUnit, setExpiryUnit] = useState<'hours' | 'minutes' | 'seconds'>('hours');
 
-  const canGenerateAdviser = userRole === "Adviser";
   const canGeneratePresident = userRole === "Adviser";
-  const canGenerateOfficer = userRole === "Adviser" || userRole === "President";
+  const canGenerateOfficer = userRole === "Adviser";
   const canGenerateMember = true;
 
   // Convert expiry to hours for backend
@@ -96,7 +94,7 @@ const GenerateInviteDropdown: React.FC<GenerateInviteDropdownProps> = ({ userRol
           <h6 className="text-sm font-medium text-black dark:text-white">Invite Link</h6>
           <button
             onClick={() => {
-              setRole(canGenerateAdviser ? "adviser" : canGeneratePresident ? "president" : canGenerateOfficer ? "officer" : "member");
+              setRole(canGeneratePresident ? "president" : "member");
               setAllowed(1);
               setLink("");
               setExpiry(DEFAULT_EXPIRY_HOURS);

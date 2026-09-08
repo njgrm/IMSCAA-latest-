@@ -1,6 +1,7 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('DELETE'); $actor=require_roles('adviser');
 // delete_requirement.php
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 require_once __DIR__ . '/cors.php';
@@ -36,12 +37,7 @@ if (!$requirement_id || !$club_id) {
 }
 
 try {
-    $pdo = new PDO(
-        "mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4",
-        "root",
-        "",
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-    );
+    $pdo = db();
 
     $pdo->beginTransaction();
 
@@ -84,5 +80,6 @@ $stmt = $pdo->prepare("DELETE FROM `requirements` WHERE requirement_id = ? AND c
     echo json_encode(['requirements' => $requirements]);
 } catch (PDOException $e) {
     http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }

@@ -24,8 +24,8 @@ import streamline from "./assets/streamline.svg";
     const [width, setWidth] = useState(0);
     const x = useMotionValue(0);
     const controls = useAnimation();
-    const speedFactor = 55; 
-    
+    const speedFactor = 55;
+
 
     interface Card {
       title: string;
@@ -44,7 +44,7 @@ import streamline from "./assets/streamline.svg";
           }
         }
       };
-  
+
       const container = scrollContainerRef.current;
       if (container) {
         container.addEventListener("scroll", handleScroll);
@@ -62,7 +62,7 @@ import streamline from "./assets/streamline.svg";
         setWidth(carouselRef.current.scrollWidth - carouselRef.current.offsetWidth);
       }
     }, []);
-    
+
     const startAutoScroll = async () => {
       const currentX = x.get();
       // If near the end, reset to 0 (for an infinite loop effect)
@@ -82,7 +82,7 @@ import streamline from "./assets/streamline.svg";
         });
       }
     };
-  
+
     // Start auto scroll once width is set
     useEffect(() => {
       if (width) {
@@ -121,9 +121,9 @@ import streamline from "./assets/streamline.svg";
       imgSrc: streamline, // Ensure streamline is imported or defined
       text: "Automate processes and reduce manual work with smart solutions.",
     },
-    
+
   ];
-  
+
   const carouselItems: Card[] = [...cards, ...cards, ...cards,...cards,...cards];
 
                     return (
@@ -141,7 +141,7 @@ import streamline from "./assets/streamline.svg";
                         >
                       <div className="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-4">
                         <Link to="/" className="flex items-center space-x-3">
-                        
+
                           <img   src={isDark ? headerlogoDark : headerlogo} alt="headerlogo" className="h-14" />
                           <span className="self-center text-2xl font-bold whitespace-nowrap text-[#12262f] dark:text-primary-400">
                             <span className="bg-gradient-to-r from-[#2E9B63] to-[#3FBF7F] bg-clip-text text-transparent">
@@ -206,8 +206,8 @@ import streamline from "./assets/streamline.svg";
                         </div>
                       </div>
                     </nav>
-                
-                
+
+
 
 <motion.section
   id="home"
@@ -250,7 +250,7 @@ import streamline from "./assets/streamline.svg";
 
   {/* Overlapping Images */}
   <div className="relative w-full max-w-screen-xl mx-auto -mb-32 z-40 mt-[-3%] pt-[5%]">
-    
+
     {/* Center Image */}
 <motion.figure
   initial={{ opacity: 0, scale: 0.9 }}
@@ -440,7 +440,7 @@ import streamline from "./assets/streamline.svg";
   {/* Bottom Layer (Continuation of Top Layer) */}
 
 </div>
-             
+
 <motion.section
   id="about"
   initial={{ opacity: 0, y: 50 }}
@@ -530,8 +530,8 @@ import streamline from "./assets/streamline.svg";
   className="absolute right-[4%] top-1/3 w-[40%] text-left z-10"
 >
 <div className="flex justify-center relative mb-4 right-[33%]  min-w-[120%] ">
-    <img 
-      src={isDark ?  aboutPic4Dark : aboutPic4} 
+    <img
+      src={isDark ?  aboutPic4Dark : aboutPic4}
       alt="About IMSCCA"
     className="absolute z-10 left-0 top-0 translate-y-[-70%] h-auto opacity-100"
     />
@@ -548,17 +548,17 @@ import streamline from "./assets/streamline.svg";
           CCA
         </span>
       </h3>
-      
+
       {/* Paragraph */}
       <p className="relative z-20 text-gray-700 dark:text-gray-300 text-lg leading-relaxed">
-        The <strong>Integrated Management System for Campus Club Affairs (IMSCCA)</strong> is a 
-        modern platform that simplifies campus club operations. It combines <strong>attendance tracking, 
-        clearance processing, financial management, event coordination, and facility reservations</strong> 
-        into a single, efficient system. With <strong>QR-based tracking, real-time updates, 
-        and automated notifications</strong>, IMSCCA enhances efficiency, reduces paperwork, 
+        The <strong>Integrated Management System for Campus Club Affairs (IMSCCA)</strong> is a
+        modern platform that simplifies campus club operations. It combines <strong>attendance tracking,
+	        membership, financial management, event coordination, attendance, and operational reporting</strong>
+        into a single, efficient system. With <strong>QR-based tracking, real-time updates,
+        and automated notifications</strong>, IMSCCA enhances efficiency, reduces paperwork,
         and improves student engagement across campuses.
       </p>
- 
+
 </div>
 </motion.div>
 
@@ -704,7 +704,7 @@ import streamline from "./assets/streamline.svg";
             <div className="mb-6 md:mb-0">
               <a href="https://flowbite.com/" className="flex items-center">
                 <img
-                src={isDark ? headerlogoDark : headerlogo}  
+                src={isDark ? headerlogoDark : headerlogo}
                   className="h-12 mr-3 me-3"
                   alt="FlowBite Logo"
                 />

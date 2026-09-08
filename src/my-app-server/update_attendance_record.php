@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('POST','PUT'); $actor=require_operator();
 require_once __DIR__ . '/cors.php';
 header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS, PUT, DELETE");
@@ -10,7 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
     http_response_code(401);
@@ -22,12 +23,7 @@ $currentUserId = (int)$_SESSION['user_id'];
 $currentClubId = (int)$_SESSION['club_id'];
 
 try {
-    $pdo = new PDO(
-        "mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4",
-        "root",
-        "",
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-    );
+    $pdo = db();
 
     // Get JSON input
     $input = json_decode(file_get_contents('php://input'), true);
@@ -80,7 +76,7 @@ try {
 
     // Check if the attendance record exists and belongs to the same club
     $checkStmt = $pdo->prepare("
-        SELECT ar.attendance_id, ar.user_id, ar.attendance_status as old_status, 
+        SELECT ar.attendance_id, ar.user_id, ar.attendance_status as old_status,
                ar.notes as old_notes, r.title as event_title, r.club_id,
                u.user_fname, u.user_lname
         FROM attendance_records ar
@@ -95,7 +91,7 @@ try {
 
     $attendance = $checkStmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!attendance) {
+    if (!$attendance) {
         http_response_code(404);
         echo json_encode(['error' => 'Attendance record not found or does not belong to your club']);
         exit;
@@ -103,13 +99,13 @@ try {
 
     // Update the attendance record
     $updateStmt = $pdo->prepare("
-        UPDATE attendance_records 
-        SET attendance_status = :attendance_status, 
-            notes = :notes, 
+        UPDATE attendance_records
+        SET attendance_status = :attendance_status,
+            notes = :notes,
             verified_by = :verified_by
         WHERE attendance_id = :attendance_id
     ");
-    
+
     $updateStmt->execute([
         ':attendance_status' => $attendanceStatus,
         ':notes' => $notes,
@@ -121,13 +117,13 @@ try {
         // Check if record still exists
         $existsStmt = $pdo->prepare("SELECT attendance_id FROM attendance_records WHERE attendance_id = :attendance_id");
         $existsStmt->execute([':attendance_id' => $attendanceId]);
-        
+
         if (!$existsStmt->fetch()) {
             http_response_code(404);
             echo json_encode(['error' => 'Attendance record not found']);
             exit;
         }
-        
+
         // Record exists but wasn't updated (no changes)
         http_response_code(200);
         echo json_encode([
@@ -145,7 +141,8 @@ try {
     $returnStmt = $pdo->prepare("
         SELECT ar.attendance_id, ar.user_id, ar.requirement_id, ar.slot_id,
                ar.verified_by, ar.club_id, ar.scan_datetime, ar.attendance_status, ar.notes,
-               u.user_fname, u.user_lname, u.school_id, u.course, u.year, u.section, u.avatar,
+               u.user_fname, u.user_lname, u.school_id,
+               u.user_course AS course, u.user_year AS year, u.user_section AS section, u.avatar,
                r.title as event_title,
                ts.slot_name, ts.start_time, ts.end_time,
                v.user_fname as verifier_fname, v.user_lname as verifier_lname
@@ -156,7 +153,7 @@ try {
         LEFT JOIN users v ON ar.verified_by = v.user_id
         WHERE ar.attendance_id = :attendance_id
     ");
-    
+
     $returnStmt->execute([':attendance_id' => $attendanceId]);
     $updatedRecord = $returnStmt->fetch(PDO::FETCH_ASSOC);
 
@@ -181,10 +178,12 @@ try {
 } catch (PDOException $e) {
     error_log("Database error in update_attendance_record.php: " . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 } catch (Exception $e) {
     error_log("Error in update_attendance_record.php: " . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }
-?> 
+?>

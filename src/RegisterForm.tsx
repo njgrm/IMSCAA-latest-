@@ -21,7 +21,9 @@ const RegisterForm: React.FC = () => {
   const [inviteInfo, setInviteInfo] = useState<null | {
     role: 'member' | 'officer',
     club_id: number,
-    club_name: string
+    club_name: string,
+    target_school_id?: string | null,
+    target_email?: string | null
   }>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [inviteChecked, setInviteChecked] = useState(false);
@@ -52,7 +54,9 @@ const RegisterForm: React.FC = () => {
             setInviteInfo({
               role: data.role,
               club_id: data.club_id,
-              club_name: data.club_name
+              club_name: data.club_name,
+              target_school_id: data.target_school_id,
+              target_email: data.target_email
             });
           } else {
             setInviteInfo(null);
@@ -245,7 +249,9 @@ const RegisterForm: React.FC = () => {
                 type="text"
                 name="school_id"
                 id="school_id"
-                placeholder="Enter your school ID"
+	                placeholder="Enter your school ID"
+	                defaultValue={inviteInfo?.target_school_id || ''}
+	                readOnly={Boolean(inviteInfo?.target_school_id)}
                 className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                 required
               />
@@ -254,7 +260,7 @@ const RegisterForm: React.FC = () => {
             {/* Name Fields */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                <label htmlFor="fname" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
                   First Name
                 </label>
                 <input
@@ -267,7 +273,7 @@ const RegisterForm: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                <label htmlFor="mname" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
                   Middle Initial
                 </label>
                 <input
@@ -280,7 +286,7 @@ const RegisterForm: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                <label htmlFor="lname" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
                   Last Name
                 </label>
                 <input
@@ -297,14 +303,16 @@ const RegisterForm: React.FC = () => {
             {/* Email */}
               {adviserMode ? (
                 <div>
-                  <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                  <label htmlFor="email" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
                     Email
                   </label>
                   <input
                     type="email"
                     name="email"
                     id="email"
-                    placeholder="Enter your email"
+	                placeholder="Enter your email"
+	                defaultValue={inviteInfo?.target_email || ''}
+	                readOnly={Boolean(inviteInfo?.target_email)}
                     className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                     required
                   />
@@ -312,7 +320,7 @@ const RegisterForm: React.FC = () => {
               ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+              <label htmlFor="email" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
                 Email
               </label>
               <input
@@ -320,6 +328,8 @@ const RegisterForm: React.FC = () => {
                 name="email"
                 id="email"
                 placeholder="Enter your email"
+                defaultValue={inviteInfo?.target_email || ''}
+                readOnly={Boolean(inviteInfo?.target_email)}
                 className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                 required
               />
@@ -327,7 +337,7 @@ const RegisterForm: React.FC = () => {
             {/* Course */}
               {!adviserMode && (
             <div>
-              <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+              <label htmlFor="course" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
                 Course
               </label>
               <select
@@ -355,7 +365,7 @@ const RegisterForm: React.FC = () => {
               {!adviserMode && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                <label htmlFor="year" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
                   Year
                 </label>
                 <input
@@ -368,7 +378,7 @@ const RegisterForm: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                <label htmlFor="section" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
                   Section
                 </label>
                 <input
@@ -398,7 +408,7 @@ const RegisterForm: React.FC = () => {
                 </div>
               ) : (
             <div>
-              <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+              <label htmlFor="club" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
                 Club Name
               </label>
               <input
@@ -414,7 +424,7 @@ const RegisterForm: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                <label htmlFor="password" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
                   Password
                 </label>
                 <input

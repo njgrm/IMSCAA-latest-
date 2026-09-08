@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('POST'); $actor=require_roles('adviser');
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 require_once __DIR__ . '/cors.php';
@@ -18,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 if (empty($_SESSION['user_id']) || empty($_SESSION['club_id']) || strtolower($_SESSION['role']) !== 'adviser') {
     http_response_code(403);
     echo json_encode(['error' => 'Only adviser can deny']);
@@ -35,19 +36,24 @@ if ($request_ids && is_array($request_ids)) {
         $rid = (int)$rid;
         if (!$rid) continue;
         try {
-            $pdo = new PDO("mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4", "root", "", [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-            $stmt = $pdo->prepare("UPDATE approval_requests SET status = 'denied', approved_by = ?, approved_at = NOW() WHERE request_id = ? AND status = 'pending'");
-            $stmt->execute([$_SESSION['user_id'], $rid]);
+            $pdo = db();
+            $stmt = $pdo->prepare("UPDATE approval_requests SET status = 'denied', approved_by = ?, approved_at = NOW() WHERE request_id = ? AND club_id = ? AND status = 'pending'");
+            $stmt->execute([$_SESSION['user_id'], $rid, $actor['club_id']]);
+            if ($stmt->rowCount() === 0) {
+                $results[] = ['request_id' => $rid, 'error' => 'Request not found or already processed'];
+                continue;
+            }
             $results[] = ['request_id' => $rid, 'success' => true];
             // fetch info for notification
-            $stmt2 = $pdo->prepare("SELECT * FROM approval_requests WHERE request_id = ?");
-            $stmt2->execute([$rid]);
+            $stmt2 = $pdo->prepare("SELECT * FROM approval_requests WHERE request_id = ? AND club_id = ?");
+            $stmt2->execute([$rid, $actor['club_id']]);
             $req = $stmt2->fetch(PDO::FETCH_ASSOC);
             if ($req) {
                 notify_deletion_status($req['club_id'], $rid, 'denied', $req['type'], $req['target_id'], $req['requested_by'], $_SESSION['user_id'], date('Y-m-d H:i:s'));
             }
         } catch (PDOException $e) {
-            $results[] = ['request_id' => $rid, 'error' => $e->getMessage()];
+            error_log('Denial request failure: ' . $e->getMessage());
+            $results[] = ['request_id' => $rid, 'error' => 'Request could not be completed.'];
         }
     }
     echo json_encode(['results' => $results]);
@@ -61,20 +67,24 @@ if (!$request_id) {
 }
 
 try {
-    $pdo = new PDO("mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4", "root", "", [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-    $stmt = $pdo->prepare("UPDATE approval_requests SET status = 'denied', approved_by = ?, approved_at = NOW() WHERE request_id = ? AND status = 'pending'");
-    $stmt->execute([$_SESSION['user_id'], $request_id]);
+    $pdo = db();
+    $stmt = $pdo->prepare("UPDATE approval_requests SET status = 'denied', approved_by = ?, approved_at = NOW() WHERE request_id = ? AND club_id = ? AND status = 'pending'");
+    $stmt->execute([$_SESSION['user_id'], $request_id, $actor['club_id']]);
+    if ($stmt->rowCount() === 0) {
+        api_error(404, 'Request not found or already processed.', 'APPROVAL_REQUEST_NOT_FOUND');
+    }
     echo json_encode(['success' => true]);
     // fetch info for notification
-    $stmt2 = $pdo->prepare("SELECT * FROM approval_requests WHERE request_id = ?");
-    $stmt2->execute([$request_id]);
+    $stmt2 = $pdo->prepare("SELECT * FROM approval_requests WHERE request_id = ? AND club_id = ?");
+    $stmt2->execute([$request_id, $actor['club_id']]);
     $req = $stmt2->fetch(PDO::FETCH_ASSOC);
     if ($req) {
         notify_deletion_status($req['club_id'], $request_id, 'denied', $req['type'], $req['target_id'], $req['requested_by'], $_SESSION['user_id'], date('Y-m-d H:i:s'));
     }
 } catch (PDOException $e) {
     http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
+    error_log('IMSCCA request failure: ' . $e->getMessage());
+    api_error(500, 'The request could not be completed.', 'SERVER_ERROR');
 }
 
 // After updating the request to denied, notify via node server
@@ -92,8 +102,8 @@ function notify_deletion_status($clubId, $requestId, $status, $type, $targetId, 
     $ch = curl_init('http://localhost:3001/notify-deletion-request-status');
     curl_setopt($ch, CURLOPT_POST, 1);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, socket_service_headers());
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_exec($ch);
     curl_close($ch);
-} 
+}

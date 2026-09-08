@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php'; require_method('GET'); $actor=current_actor();
 // get_event_registrations.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -13,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
 // Check authentication
 if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
@@ -23,20 +24,17 @@ if (empty($_SESSION['user_id']) || empty($_SESSION['club_id'])) {
 }
 
 $clubId = (int)$_SESSION['club_id'];
+$isMember = $actor['role'] === 'member';
+$memberFilter = $isMember ? ' AND er.user_id = :actor_user_id' : '';
 $requirementId = isset($_GET['requirement_id']) ? (int)$_GET['requirement_id'] : 0;
 
 try {
-    $pdo = new PDO(
-        "mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4",
-        "root",
-        "",
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-    );
+    $pdo = db();
 
     if ($requirementId) {
         // Get registrations for a specific event
         $stmt = $pdo->prepare("
-            SELECT 
+            SELECT
                 er.registration_id,
                 er.requirement_id,
                 er.user_id,
@@ -65,20 +63,22 @@ try {
             INNER JOIN users u ON er.user_id = u.user_id
             INNER JOIN requirements r ON er.requirement_id = r.requirement_id
             INNER JOIN users rb ON er.registered_by = rb.user_id
-            LEFT JOIN attendance_records ar ON er.user_id = ar.user_id 
+            LEFT JOIN attendance_records ar ON er.user_id = ar.user_id
                 AND er.requirement_id = ar.requirement_id
-            WHERE er.requirement_id = :requirement_id 
+            WHERE er.requirement_id = :requirement_id
                 AND r.club_id = :club_id
                 AND r.requirement_type = 'event'
-                AND er.status = 'registered'
+                AND er.status = 'registered' {$memberFilter}
             ORDER BY u.user_lname, u.user_fname
         ");
-        $stmt->execute([':requirement_id' => $requirementId, ':club_id' => $clubId]);
-        
+        $params = [':requirement_id' => $requirementId, ':club_id' => $clubId];
+        if ($isMember) $params[':actor_user_id'] = $actor['user_id'];
+        $stmt->execute($params);
+
     } else {
         // Get all event registrations for the club
         $stmt = $pdo->prepare("
-            SELECT 
+            SELECT
                 er.registration_id,
                 er.requirement_id,
                 er.user_id,
@@ -107,14 +107,16 @@ try {
             INNER JOIN users u ON er.user_id = u.user_id
             INNER JOIN requirements r ON er.requirement_id = r.requirement_id
             INNER JOIN users rb ON er.registered_by = rb.user_id
-            LEFT JOIN attendance_records ar ON er.user_id = ar.user_id 
+            LEFT JOIN attendance_records ar ON er.user_id = ar.user_id
                 AND er.requirement_id = ar.requirement_id
             WHERE r.club_id = :club_id
                 AND r.requirement_type = 'event'
-                AND er.status = 'registered'
+                AND er.status = 'registered' {$memberFilter}
             ORDER BY r.start_datetime DESC, u.user_lname, u.user_fname
         ");
-        $stmt->execute([':club_id' => $clubId]);
+        $params = [':club_id' => $clubId];
+        if ($isMember) $params[':actor_user_id'] = $actor['user_id'];
+        $stmt->execute($params);
     }
 
     $registrations = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -123,7 +125,7 @@ try {
     echo json_encode($registrations ?: []);
 
 } catch (PDOException $e) {
-    http_response_code(500);
-    echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+    error_log('get_event_registrations.php database error: ' . $e->getMessage());
+    api_error(500, 'Unable to load event registrations.', 'DATABASE_ERROR');
 }
-?> 
+?>

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bootstrap.php';
 // process_automatic_absences.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -18,7 +19,8 @@ $isCliRequest = (php_sapi_name() === 'cli');
 $isAuthenticatedRequest = false;
 
 if (!$isCliRequest) {
-    session_start();
+    require_method('POST');
+    if (session_status() !== PHP_SESSION_ACTIVE) session_start();
     $isAuthenticatedRequest = (!empty($_SESSION['user_id']) && !empty($_SESSION['club_id']));
 
     if (!$isAuthenticatedRequest) {
@@ -45,12 +47,7 @@ if ($isAuthenticatedRequest) {
 }
 
 try {
-    $pdo = new PDO(
-        "mysql:host=127.0.0.1;dbname=db_imscca;charset=utf8mb4",
-        "root",
-        "",
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-    );
+    $pdo = db();
 
     $pdo->beginTransaction();
 
@@ -69,10 +66,11 @@ try {
             THEN 'ongoing'
             ELSE status
         END
-        WHERE requirement_type = 'event' 
+        WHERE requirement_type = 'event'
+        " . ($clubId ? "AND club_id = :status_club_id" : "") . "
         AND status IN ('scheduled', 'ongoing')
     ");
-    $updateStatusStmt->execute();
+    $updateStatusStmt->execute($clubId ? [':status_club_id' => $clubId] : []);
     $updatedEvents = $updateStatusStmt->rowCount();
     
     if ($updatedEvents > 0 && !$isCliRequest) {
@@ -193,7 +191,8 @@ try {
         $pdo->rollback();
     }
     
-    $error = 'Database error: ' . $e->getMessage();
+    error_log('Automatic absence database failure: ' . $e->getMessage());
+    $error = 'Automatic absence processing failed.';
     
     if (!$isCliRequest) {
         http_response_code(500);
@@ -206,7 +205,8 @@ try {
         $pdo->rollback();
     }
     
-    $error = 'Server error: ' . $e->getMessage();
+    error_log('Automatic absence processing failure: ' . $e->getMessage());
+    $error = 'Automatic absence processing failed.';
     
     if (!$isCliRequest) {
         http_response_code(500);
