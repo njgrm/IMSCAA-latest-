@@ -51,33 +51,20 @@ try {
 
     $pdo->beginTransaction();
 
-    // update event statuses based on current time
-    $updateStatusStmt = $pdo->prepare("
-        UPDATE requirements 
-        SET status = CASE
-            WHEN requirement_type = 'event' 
-                 AND status IN ('scheduled', 'ongoing') 
-                 AND end_datetime < NOW() 
-            THEN 'completed'
-            WHEN requirement_type = 'event' 
-                 AND status = 'scheduled' 
-                 AND start_datetime <= NOW() 
-                 AND end_datetime > NOW() 
-            THEN 'ongoing'
-            ELSE status
-        END
-        WHERE requirement_type = 'event'
-        " . ($clubId ? "AND club_id = :status_club_id" : "") . "
-        AND status IN ('scheduled', 'ongoing')
-    ");
-    $updateStatusStmt->execute($clubId ? [':status_club_id' => $clubId] : []);
-    $updatedEvents = $updateStatusStmt->rowCount();
-    
-    if ($updatedEvents > 0 && !$isCliRequest) {
-        error_log("Updated status for {$updatedEvents} events based on current time");
+    // Statuses are materialized from one shared rule (every club when run from CLI).
+    $statusClubIds = $clubId
+        ? [$clubId]
+        : $pdo->query('SELECT club_id FROM club')->fetchAll(PDO::FETCH_COLUMN);
+    $updatedEvents = 0;
+    foreach ($statusClubIds as $statusClubId) {
+        $updatedEvents += refresh_requirement_statuses($pdo, (int)$statusClubId);
     }
 
-    // Find events that ended yesterday and are completed
+    if ($updatedEvents > 0 && !$isCliRequest) {
+        error_log("Updated {$updatedEvents} requirement statuses based on current time");
+    }
+
+    // Find events that have ended and are completed
     $whereClause = $clubId ? "AND r.club_id = :club_id" : "";
     
     $stmt = $pdo->prepare("
@@ -90,7 +77,7 @@ try {
         FROM requirements r
         WHERE r.requirement_type = 'event'
             AND r.status = 'completed'
-            AND r.end_datetime < DATE_SUB(NOW(), INTERVAL 1 DAY)
+            AND r.end_datetime < NOW()
             AND NOT EXISTS (
                 SELECT 1 FROM automatic_absence_processing 
                 WHERE requirement_id = r.requirement_id

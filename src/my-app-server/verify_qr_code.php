@@ -162,7 +162,7 @@ require_once __DIR__ . '/cors.php';
                 INNER JOIN users u ON ar.user_id = u.user_id
                 INNER JOIN requirements r ON ar.requirement_id = r.requirement_id
                 LEFT JOIN attendance_time_slots ts ON ar.slot_id = ts.slot_id
-                INNER JOIN users v ON ar.verified_by = v.user_id
+                LEFT JOIN users v ON ar.verified_by = v.user_id
                 WHERE ar.user_id = ?
                 AND ar.requirement_id IN ($placeholders)
                 AND DATE(ar.scan_datetime) = CURDATE()

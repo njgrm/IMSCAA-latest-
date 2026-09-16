@@ -26,6 +26,7 @@ interface Requirement {
   amount_due: number;
   req_picture: string; 
   date_added: string;
+  assigned_user_ids?: number[];
 }
 
 interface User {
@@ -93,11 +94,12 @@ const Requirements: React.FC = () => {
 
   const [form, setForm] = useState(emptyForm);
 
-  // Function to update event statuses locally based on current time
+  // Function to update event/activity statuses locally based on current time.
+  // Fees are payment-driven and stay as the server reports them.
   const updateEventStatusesLocally = (events: Requirement[]): Requirement[] => {
     const now = new Date();
     return events.map(event => {
-      if (event.requirement_type !== 'event') {
+      if (event.requirement_type !== 'event' && event.requirement_type !== 'activity') {
         return event;
       }
       
@@ -305,13 +307,13 @@ const Requirements: React.FC = () => {
     if (!form.start_datetime) return toast.error("Start date is required!");
     if (!form.end_datetime) return toast.error("End date is required!");
 
-    // For events and activities, check if users are selected
-    if ((form.requirement_type === 'event' || form.requirement_type === 'activity') && selectedUsers.length === 0) {
-      return toast.error("Please select at least one user for this event/activity!");
+    // Events and activities need attendees; a fee needs the payers it must collect from.
+    if ((form.requirement_type === 'event' || form.requirement_type === 'activity' || form.requirement_type === 'fee') && selectedUsers.length === 0) {
+      return toast.error("Please select at least one user for this event/activity/fee!");
     }
 
     try {
-      const endpoint = (form.requirement_type === 'event' || form.requirement_type === 'activity')
+      const endpoint = (form.requirement_type === 'event' || form.requirement_type === 'activity' || form.requirement_type === 'fee')
         ? "/my-app-server/add_requirement_with_registrations.php"
         : "/my-app-server/add_requirement.php";
 
@@ -352,7 +354,7 @@ const Requirements: React.FC = () => {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, requirement_id: editId })
+        body: JSON.stringify({ ...form, requirement_id: editId, selected_users: selectedUsers })
       });
 
       const data = await res.json();
@@ -438,6 +440,8 @@ const Requirements: React.FC = () => {
       amount_due: r.amount_due,
        req_picture: r.req_picture || placeholderImage
     }));
+    // Seed the payer/attendee selection from what is currently assigned.
+    setSelectedUsers(Array.isArray(r.assigned_user_ids) ? r.assigned_user_ids : []);
     setIsEditOpen(true);
   };
 
@@ -564,15 +568,21 @@ const Requirements: React.FC = () => {
     }
   }, [isAddOpen, form.requirement_type, users]);
 
+  // A fee starts with no payers selected: it usually targets a subset of members, so
+  // inheriting the "all users" default that events auto-select would mark everyone as owing.
+  useEffect(() => {
+    if (form.requirement_type === 'fee') setSelectedUsers([]);
+  }, [form.requirement_type]);
+
   return (
     <div className="flex min-h-screen min-w-0 w-full bg-gray-50 dark:bg-gray-900 py-14">
       <Sidebar
       />
 
-      <div className="flex min-w-0 flex-1 sm:ml-64 relative flex-col">
+      <div className="relative flex min-w-0 w-full flex-col overflow-x-hidden sm:ml-64 sm:w-[calc(100%-16rem)]">
         <div className="p-3 sm:px-5 sm:pt-5 sm:pb-1">
           <Breadcrumb items={trail} />
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between dark:border-gray-700 pt-0 mb-0 gap-4 sm:gap-0">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between dark:border-gray-700 pt-0 mb-0 gap-4 lg:flex-nowrap">
             <div className="flex-1 max-w-md">
               <Searchbar
                 search={filters.search}
@@ -580,7 +590,7 @@ const Requirements: React.FC = () => {
               />
             </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 ml-0 sm:ml-4 relative">
+            <div className="relative flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:ml-4 lg:flex-nowrap">
               <ToastContainer />
               <Button
                 onClick={() => {
@@ -798,11 +808,11 @@ const Requirements: React.FC = () => {
           setIsAddOpen(false)
           setForm(emptyForm)  
         }}
-        size={(form.requirement_type === 'event' || form.requirement_type === 'activity') ? "7xl" : "xl"}
+        size={(form.requirement_type === 'event' || form.requirement_type === 'activity' || form.requirement_type === 'fee') ? "7xl" : "xl"}
       >
         <Modal.Header className="dark:bg-gray-800 rounded">Add New Requirement</Modal.Header>
         <Modal.Body className="dark:bg-gray-800 dark:text-white py-2 pb-8 rounded">
-          {(form.requirement_type === 'event' || form.requirement_type === 'activity') ? (
+          {(form.requirement_type === 'event' || form.requirement_type === 'activity' || form.requirement_type === 'fee') ? (
             // Large modal with user selection
             <div className="mx-auto max-w-[95vw] py-4">
               <div className="grid grid-cols-1 gap-x-6 gap-y-2 dark:text-white lg:grid-cols-[2fr_3fr]">
@@ -907,6 +917,22 @@ const Requirements: React.FC = () => {
                         </select>
                       </div>
                     </div>
+
+                    {form.requirement_type === 'fee' && (
+                      <div>
+                        <label className="block mb-1 text-sm">Amount Due</label>
+                        <input
+                          aria-label="Requirement amount due"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          name="amount_due"
+                          value={form.amount_due}
+                          onChange={handleFormChange}
+                          className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
+                        />
+                      </div>
+                    )}
                 
 
                     <div className="mb-0 mt-4">
@@ -1349,6 +1375,33 @@ const Requirements: React.FC = () => {
             onChange={handleFormChange}
              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-primary-400 focus:border-primary-400"
           />
+        </div>
+      )}
+
+      {(form.requirement_type === 'event' || form.requirement_type === 'activity' || form.requirement_type === 'fee') && (
+        <div>
+          <label className="block mb-1 text-sm">
+            {form.requirement_type === 'fee' ? 'Payers' : 'Attendees'} ({selectedUsers.length} selected)
+          </label>
+          <div className="max-h-56 overflow-auto rounded-lg border border-gray-300 dark:border-gray-600">
+            {users.map(u => (
+              <label
+                key={u.user_id}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                <input
+                  type="checkbox"
+                  aria-label={`Assign ${u.user_fname} ${u.user_lname}`}
+                  checked={selectedUsers.includes(u.user_id)}
+                  onChange={() => setSelectedUsers(prev =>
+                    prev.includes(u.user_id) ? prev.filter(id => id !== u.user_id) : [...prev, u.user_id]
+                  )}
+                />
+                <span>{u.user_fname} {u.user_lname}</span>
+              </label>
+            ))}
+            {!users.length && <p className="px-3 py-2 text-sm text-gray-500">No members yet.</p>}
+          </div>
         </div>
       )}
 

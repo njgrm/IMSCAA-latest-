@@ -127,8 +127,9 @@ try {
         $requirementId = $pdo->lastInsertId();
         $registeredCount = 0;
 
-        // If this is an event or activity with selected users, register
-        if (in_array($requirementType, ['event', 'activity']) && !empty($selectedUsers)) {
+        // If this is an event, activity, or fee with selected users, record the assignees.
+        // For a fee those assignees become the set of payers that must all settle.
+        if (in_array($requirementType, ['event', 'activity', 'fee']) && !empty($selectedUsers)) {
             $stmt = $pdo->prepare("
                 SELECT user_id, role FROM users
                 WHERE user_id IN (" . implode(',', array_fill(0, count($selectedUsers), '?')) . ")

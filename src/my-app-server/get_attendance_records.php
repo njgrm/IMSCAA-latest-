@@ -42,6 +42,8 @@ try {
             ar.scan_datetime,
             ar.attendance_status,
             ar.notes,
+            pending.request_id AS pending_request_id,
+            pending.status AS approval_status,
 
             -- User information
             u.user_fname,
@@ -78,7 +80,10 @@ try {
         LEFT JOIN attendance_time_slots ts ON ar.slot_id = ts.slot_id
 
         -- Join with users table for verifier info
-        INNER JOIN users v ON ar.verified_by = v.user_id
+            LEFT JOIN users v ON ar.verified_by = v.user_id
+        LEFT JOIN approval_requests pending
+          ON pending.club_id=ar.club_id AND pending.type='attendance'
+         AND pending.target_id=ar.attendance_id AND pending.status='pending'
 
         WHERE ar.club_id = :club_id
         " . ($actor['role'] === 'member' ? " AND ar.user_id = :self_user_id" : "") . "

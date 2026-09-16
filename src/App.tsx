@@ -1,5 +1,5 @@
 import React, { useEffect, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import io from 'socket.io-client';
@@ -21,7 +21,9 @@ interface DeletionRequestStatusEvent {
   requestedBy: number;
 }
 
-const socket = io(window.location.origin, { autoConnect: false, transports: ['websocket'] });
+// WebSocket first, with HTTP long-polling as a fallback for networks that block it.
+// Trying polling first would add request churn on every navigation.
+const socket = io(window.location.origin, { autoConnect: false, transports: ['websocket', 'polling'] });
 
 const MemberDashboard = React.lazy(() => import('./MemberDashboard'));
 const History = React.lazy(() => import('./History'));
@@ -37,6 +39,8 @@ const QRScanner = React.lazy(() => import('./QRScanner'));
 const EventAttendanceReport = React.lazy(() => import('./EventAttendanceReport'));
 
 const ADMIN_ROLES = ['adviser', 'president', 'officer'];
+const SOCKET_CONNECTION_TOAST_ID = 'socket-connection-unavailable';
+const SOCKET_AUTH_TOAST_ID = 'socket-auth-unavailable';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -68,29 +72,58 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 function AppRoutes() {
   const { user, userRole } = useUser();
+  const { pathname } = useLocation();
   const userClubId = user?.club_id || null;
+
+  useEffect(() => {
+    const titles: Record<string, string> = { '/':'IMSCCA','/landing':'IMSCCA','/login':'Sign In | IMSCCA','/register':'Register | IMSCCA','/dashboard':'Dashboard | IMSCCA','/members':'Members | IMSCCA','/requirements':'Requirements | IMSCCA','/transactions':'Transactions | IMSCCA','/attendance/list':'Attendance List | IMSCCA','/attendance/config':'Attendance Configuration | IMSCCA','/attendance/scan':'QR Scanner | IMSCCA','/approvals':'Approvals | IMSCCA','/reports/attendance-report':'Attendance Report | IMSCCA','/reports/transaction-report':'Transaction Report | IMSCCA','/history':'History | IMSCCA' };
+    document.title = titles[pathname] || 'IMSCCA';
+  }, [pathname]);
 
   useEffect(() => {
     if (userClubId) {
       let active = true;
-      let socketToken = '';
-      const joinClub = () => {
-        if (socketToken) socket.emit('joinClub', { clubId: userClubId, token: socketToken });
+      const dismissSocketWarnings = () => {
+        toast.dismiss(SOCKET_CONNECTION_TOAST_ID);
+        toast.dismiss(SOCKET_AUTH_TOAST_ID);
+      };
+      const reportAuthFailure = (status?: number) => {
+        if (!active) return;
+        const message = status === 401
+          ? 'Your live-update session expired. Refresh the page or sign in again; other features still work.'
+          : 'Live updates could not be authorized. Other features still work; refresh to retry.';
+        toast.warning(message, { toastId: SOCKET_AUTH_TOAST_ID, autoClose: 8000 });
+      };
+      // Fetches a fresh token on every join. Tokens expire after five minutes, so
+      // reusing the one fetched at mount would silently drop every later reconnect.
+      const joinClub = async () => {
+        dismissSocketWarnings();
+        try {
+          const response = await fetch('/my-app-server/get_socket_token.php', { credentials: 'include' });
+          if (!response.ok) {
+            reportAuthFailure(response.status);
+            return;
+          }
+          const data = await response.json();
+          if (!active) return;
+          socket.emit('joinClub', { clubId: userClubId, token: data.token }, (ack?: { ok?: boolean }) => {
+            if (!active || ack?.ok) return;
+            reportAuthFailure();
+          });
+        } catch {
+          reportAuthFailure();
+        }
       };
       const handleConnectError = () => {
-        toast.warning('Live notifications are temporarily unavailable.', { toastId: 'socket-unavailable' });
+        toast.warning('Live updates are disconnected. Other features still work while IMSCCA reconnects.', {
+          toastId: SOCKET_CONNECTION_TOAST_ID,
+          autoClose: 6000,
+        });
       };
 
+      socket.on('connect', joinClub);
       socket.on('connect_error', handleConnectError);
-      void fetch('/my-app-server/get_socket_token.php', { credentials: 'include' })
-        .then(response => response.ok ? response.json() : Promise.reject(new Error('token unavailable')))
-        .then(data => {
-          if (!active) return;
-          socketToken = data.token;
-          socket.on('connect', joinClub);
-          if (socket.connected) joinClub(); else socket.connect();
-        })
-        .catch(handleConnectError);
+      if (socket.connected) void joinClub(); else socket.connect();
 
       socket.off('registration');
       socket.on('registration', ({ role, fullName }: RegistrationEvent) => {

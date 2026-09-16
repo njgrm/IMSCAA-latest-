@@ -62,6 +62,7 @@ if ($requirement_type === 'fee' && $amount_due <= 0) {
 
 try {
     $pdo = db();
+    $pdo->beginTransaction();
 
     // Update requirement
     $stmt = $pdo->prepare("
@@ -92,6 +93,49 @@ try {
         $club_id
     ]);
 
+    // Reconcile the assigned users (event/activity attendees, or a fee's payers).
+    // Only touched when the caller sends the field, so other editors stay unaffected.
+    if (array_key_exists('selected_users', $input)) {
+        $requested = array_values(array_unique(array_filter(
+            array_map('intval', (array)$input['selected_users']),
+            fn($id) => $id > 0
+        )));
+
+        $eligible = [];
+        if (!empty($requested)) {
+            $placeholders = implode(',', array_fill(0, count($requested), '?'));
+            $userStmt = $pdo->prepare("
+                SELECT user_id FROM users
+                WHERE club_id = ? AND LOWER(role) <> 'adviser' AND user_id IN ($placeholders)
+            ");
+            $userStmt->execute(array_merge([$club_id], $requested));
+            $eligible = array_map('intval', $userStmt->fetchAll(PDO::FETCH_COLUMN));
+        }
+
+        $existingStmt = $pdo->prepare("
+            SELECT user_id FROM event_registrations
+            WHERE requirement_id = ? AND status = 'registered'
+        ");
+        $existingStmt->execute([$requirement_id]);
+        $existing = array_map('intval', $existingStmt->fetchAll(PDO::FETCH_COLUMN));
+
+        $toRemove = array_values(array_diff($existing, $eligible));
+        if (!empty($toRemove)) {
+            $placeholders = implode(',', array_fill(0, count($toRemove), '?'));
+            $pdo->prepare("DELETE FROM event_registrations WHERE requirement_id = ? AND user_id IN ($placeholders)")
+                ->execute(array_merge([$requirement_id], $toRemove));
+        }
+
+        foreach (array_diff($eligible, $existing) as $userId) {
+            $pdo->prepare("
+                INSERT INTO event_registrations (user_id, requirement_id, registered_by, registered_at)
+                VALUES (?, ?, ?, NOW())
+            ")->execute([$userId, $requirement_id, $actor['user_id']]);
+        }
+    }
+
+    $pdo->commit();
+
     // Return updated requirements
     $stmt = $pdo->prepare("
         SELECT 
@@ -108,6 +152,7 @@ try {
     echo json_encode(['requirements' => $requirements]);
 
 } catch (PDOException $e) {
+    if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
     http_response_code(500);
     error_log('IMSCCA request failure: ' . $e->getMessage());
     api_error(500, 'The request could not be completed.', 'SERVER_ERROR');

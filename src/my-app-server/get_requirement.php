@@ -30,31 +30,43 @@ $type = isset($_GET['type']) ? $_GET['type'] : null;
 try {
     $pdo = db();
 
+    // Materialize statuses first so every reader sees the current lifecycle state.
+    refresh_requirement_statuses($pdo, $clubId);
+
     $sql = "
         SELECT 
-            requirement_id,
-            title,
-            description,
-            start_datetime,
-            end_datetime,
-            location,
-            requirement_type,
-            status,
-            club_id,
-            CAST(amount_due AS DECIMAL(10,2)) AS amount_due,
-            date_added,
-            req_picture
+            requirements.requirement_id,
+            requirements.title,
+            requirements.description,
+            requirements.start_datetime,
+            requirements.end_datetime,
+            requirements.location,
+            requirements.requirement_type,
+            requirements.status,
+            requirements.club_id,
+            CAST(requirements.amount_due AS DECIMAL(10,2)) AS amount_due,
+            requirements.date_added,
+            requirements.req_picture,
+            pending.request_id AS pending_request_id,
+            pending.status AS approval_status,
+            (SELECT GROUP_CONCAT(er.user_id ORDER BY er.user_id)
+               FROM event_registrations er
+              WHERE er.requirement_id = requirements.requirement_id
+                AND er.status = 'registered') AS assigned_user_ids
         FROM `requirements`
-        WHERE club_id = :clubId
+        LEFT JOIN approval_requests pending
+          ON pending.club_id=requirements.club_id AND pending.type='requirement'
+         AND pending.target_id=requirements.requirement_id AND pending.status='pending'
+        WHERE requirements.club_id = :clubId
     ";
     $params = [':clubId' => $clubId];
 
     if ($type) {
-        $sql .= " AND requirement_type = :type";
+        $sql .= " AND requirements.requirement_type = :type";
         $params[':type'] = $type;
     }
 
-    $sql .= " ORDER BY start_datetime ASC";
+    $sql .= " ORDER BY requirements.start_datetime ASC";
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
@@ -62,6 +74,9 @@ try {
 
     // Format datetime fields
     foreach ($requirements as &$req) {
+        $req['assigned_user_ids'] = ($req['assigned_user_ids'] ?? '') === ''
+            ? []
+            : array_map('intval', explode(',', (string)$req['assigned_user_ids']));
         if (isset($req['start_datetime']) && $req['start_datetime']) {
             $req['start_datetime'] = date('Y-m-d H:i:s', strtotime($req['start_datetime']));
         }

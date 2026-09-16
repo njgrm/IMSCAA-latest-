@@ -1,14 +1,14 @@
 <?php
 declare(strict_types=1);
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
+require_once __DIR__.'/requirement_status.php';
 date_default_timezone_set(getenv('IMSCCA_TIMEZONE') ?: 'Asia/Manila');
 $host=getenv('IMSCCA_DB_HOST')?:'127.0.0.1'; $name=getenv('IMSCCA_DB_NAME')?:'db_imscca';
 $pdo=new PDO("mysql:host=$host;dbname=$name;charset=utf8mb4",getenv('IMSCCA_DB_USER')?:'root',getenv('IMSCCA_DB_PASSWORD')?:'',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
 $now=(new DateTimeImmutable())->format('Y-m-d H:i:s'); $summary=['clubs'=>0,'events_updated'=>0,'events_processed'=>0,'absences_created'=>0,'errors'=>[]];
 $clubs=$pdo->query('SELECT club_id FROM club ORDER BY club_id')->fetchAll(PDO::FETCH_COLUMN);
 foreach($clubs as $clubId){$summary['clubs']++;try{$pdo->beginTransaction();
-  $update=$pdo->prepare("UPDATE requirements SET status=CASE WHEN start_datetime>? THEN 'scheduled' WHEN end_datetime<? THEN 'completed' ELSE 'ongoing' END WHERE club_id=? AND requirement_type='event'");
-  $update->execute([$now,$now,$clubId]);$summary['events_updated']+=$update->rowCount();
+  $summary['events_updated']+=refresh_requirement_statuses($pdo,(int)$clubId);
   $verifier=$pdo->prepare("SELECT user_id FROM users WHERE club_id=? AND role IN ('adviser','president','officer') ORDER BY FIELD(role,'adviser','president','officer') LIMIT 1");$verifier->execute([$clubId]);$verifierId=(int)$verifier->fetchColumn();
   $events=$pdo->prepare("SELECT requirement_id,end_datetime FROM requirements r WHERE club_id=? AND requirement_type='event' AND end_datetime<? FOR UPDATE");
   $events->execute([$clubId,$now]);

@@ -80,15 +80,15 @@ if ($request_ids && is_array($request_ids)) {
                     $del = $pdo->prepare("DELETE FROM club WHERE club_id = ?");
                     $del->execute([$club_id]);
                 } else if ($type === 'transaction') {
-                    // Only delete if the transaction belongs to a requirement in this club
+                    // Preserve financial history by voiding the obligation.
                     $del = $pdo->prepare("
-                        DELETE t
-                          FROM transactions t
+                        UPDATE transactions t
                           JOIN requirements r ON t.requirement_id = r.requirement_id
+                           SET t.is_voided = 1, t.voided_at = NOW(6), t.voided_by = ?, t.void_reason = ?
                          WHERE t.transaction_id = ?
                            AND r.club_id = ?
                     ");
-                    $del->execute([$target_id, $club_id]);
+                    $del->execute([$actor['user_id'], $req['reason'] ?: 'Approved void request', $target_id, $club_id]);
                 } else if ($type === 'attendance') {
                     // Delete attendance record
                     $del = $pdo->prepare("
@@ -129,6 +129,16 @@ if ($request_ids && is_array($request_ids)) {
                     }
 
                     if (!empty($updateFields)) {
+                        // Capture the previous status so the change stays auditable.
+                        $priorStmt = $pdo->prepare("
+                            SELECT ar.attendance_status
+                            FROM attendance_records ar
+                            JOIN requirements r ON ar.requirement_id = r.requirement_id
+                            WHERE ar.attendance_id = ? AND r.club_id = ?
+                        ");
+                        $priorStmt->execute([$target_id, $club_id]);
+                        $priorStatus = $priorStmt->fetchColumn();
+
                         $updateValues[] = $target_id;
                         $updateValues[] = $club_id;
 
@@ -140,6 +150,10 @@ if ($request_ids && is_array($request_ids)) {
                         ";
                         $updateStmt = $pdo->prepare($updateSql);
                         $updateStmt->execute($updateValues);
+
+                        if (isset($newData['attendance_status'])) {
+                            record_attendance_status_change($pdo, (int)$target_id, $priorStatus === false ? null : (string)$priorStatus, (string)$newData['attendance_status'], (int)$_SESSION['user_id'], 'correction');
+                        }
                     }
                 }
             }
@@ -215,15 +229,15 @@ try {
             $del = $pdo->prepare("DELETE FROM club WHERE club_id = ?");
             $del->execute([$club_id]);
         } else if ($type === 'transaction') {
-            // Only delete if the transaction belongs to a requirement in this club
+            // Preserve financial history by voiding the obligation.
             $del = $pdo->prepare("
-                DELETE t
-                  FROM transactions t
+                UPDATE transactions t
                   JOIN requirements r ON t.requirement_id = r.requirement_id
+                   SET t.is_voided = 1, t.voided_at = NOW(6), t.voided_by = ?, t.void_reason = ?
                  WHERE t.transaction_id = ?
                    AND r.club_id = ?
             ");
-            $del->execute([$target_id, $club_id]);
+            $del->execute([$actor['user_id'], $req['reason'] ?: 'Approved void request', $target_id, $club_id]);
         } else if ($type === 'attendance') {
             // Delete attendance record
             $del = $pdo->prepare("
@@ -264,6 +278,16 @@ try {
             }
 
             if (!empty($updateFields)) {
+                // Capture the previous status so the change stays auditable.
+                $priorStmt = $pdo->prepare("
+                    SELECT ar.attendance_status
+                    FROM attendance_records ar
+                    JOIN requirements r ON ar.requirement_id = r.requirement_id
+                    WHERE ar.attendance_id = ? AND r.club_id = ?
+                ");
+                $priorStmt->execute([$target_id, $club_id]);
+                $priorStatus = $priorStmt->fetchColumn();
+
                 $updateValues[] = $target_id;
                 $updateValues[] = $club_id;
 
@@ -275,6 +299,10 @@ try {
                 ";
                 $updateStmt = $pdo->prepare($updateSql);
                 $updateStmt->execute($updateValues);
+
+                if (isset($newData['attendance_status'])) {
+                    record_attendance_status_change($pdo, (int)$target_id, $priorStatus === false ? null : (string)$priorStatus, (string)$newData['attendance_status'], (int)$_SESSION['user_id'], 'correction');
+                }
             }
         }
     }
@@ -303,11 +331,5 @@ function notify_deletion_status($clubId, $requestId, $status, $type, $targetId, 
         'approvedBy' => $approvedBy,
         'approvedAt' => $approvedAt
     ];
-    $ch = curl_init('http://localhost:3001/notify-deletion-request-status');
-    curl_setopt($ch, CURLOPT_POST, 1);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, socket_service_headers());
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_exec($ch);
-    curl_close($ch);
+    socket_notify('/notify-deletion-request-status', $data);
 }

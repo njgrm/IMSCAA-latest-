@@ -229,6 +229,11 @@ const QRScanner: React.FC = () => {
       }
 
       toast.success('Attendance recorded successfully!');
+
+      if (Array.isArray(data.warnings) && data.warnings.length > 0) {
+        data.warnings.forEach((warning: string) => toast.warn(warning, { autoClose: 8000 }));
+      }
+
       setIsVerificationModalOpen(false);
       setScannedUser(null);
       setAttendanceForm(prev => ({ ...prev, notes: '', time_slot_id: undefined, attendance_status: 'present' }));

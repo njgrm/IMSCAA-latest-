@@ -4,8 +4,9 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const local = 'http://localhost:5173';
+const local = process.env.IMSCCA_LOCAL_URL || 'https://localhost:5173';
 const tunnel = process.env.IMSCCA_TUNNEL_URL || 'https://l2clz45f-5173.asse.devtunnels.ms';
+const skipTunnel = process.env.IMSCCA_SKIP_TUNNEL === '1';
 const api = 'http://localhost/my-app-server';
 const stamp = Date.now().toString();
 const password = 'ReleaseQA123!';
@@ -51,8 +52,17 @@ async function setup() {
   check('setup time slot', slot.ok, JSON.stringify(slot.body));
   const qr = await json(ctx, `generate_qr_code.php?user_id=${member.user_id}`);
   if (!qr.ok) throw new Error(`qr ${qr.status}: ${JSON.stringify(qr.body)}`);
+  const fee = await json(ctx, 'add_requirement.php', { method:'POST', data:{ title:`Release Fee ${stamp}`, description:'Disposable payment test', requirement_type:'fee', amount_due:500, start_datetime:mysqlDate(start), end_datetime:mysqlDate(end), status:'scheduled' } });
+  if (!fee.ok) throw new Error(`fee ${fee.status}: ${JSON.stringify(fee.body)}`);
+  const feeId = Number((fee.body.requirements || []).find(item => item.title === `Release Fee ${stamp}`)?.requirement_id);
+  if (!feeId) throw new Error(`fee response omitted id: ${JSON.stringify(fee.body)}`);
+  const obligation = await json(ctx, 'add_transaction.php', { method:'POST', data:{ user_ids:[member.user_id], requirement_ids:[feeId], fee_description:'Release fee', amount_paid:0, payment_status:'unpaid', payment_method:'' } });
+  if (!obligation.ok) throw new Error(`obligation ${obligation.status}: ${JSON.stringify(obligation.body)}`);
+  const transactionId = Number(obligation.body.created_ids?.[0]);
+  const payment = await json(ctx, 'record_payment.php', { method:'POST', data:{ transaction_id:transactionId, amount:125, payment_method:'Cash', reference:'RELEASE-QA', idempotency_key:`release_${stamp}` } });
+  if (!payment.ok) throw new Error(`payment ${payment.status}: ${JSON.stringify(payment.body)}`);
   await ctx.dispose();
-  return { clubId, adviserId, adviser, officer, member, eventId, qrData:qr.body.qr_code_data || qr.body.qr_data || qr.body.data };
+  return { clubId, adviserId, adviser, officer, member, eventId, transactionId, qrData:qr.body.qr_code_data || qr.body.qr_data || qr.body.data };
 }
 
 async function login(page, base, schoolId) {
@@ -78,7 +88,18 @@ async function navigate(page, url) {
       await page.goto(url, { waitUntil:url.includes('devtunnels.ms')?'commit':'domcontentloaded', timeout:45000 });
       await page.locator('body').waitFor({ state:'visible', timeout:15000 });
       return;
-    } catch (error) { lastError=error; }
+    } catch (error) {
+      lastError=error;
+      // React StrictMode plus React Router re-issue a same-URL history replace on
+      // mount, which Playwright reports as an interrupting navigation. Let the route
+      // settle instead of abandoning an in-flight document request.
+      if (/interrupted by another navigation/.test(String(error?.message))) {
+        await page.waitForTimeout(750);
+        const settled = page.url().split('#')[0] === url.split('#')[0]
+          && await page.locator('body').isVisible().catch(()=>false);
+        if (settled) return;
+      }
+    }
   }
   throw lastError;
 }
@@ -94,7 +115,7 @@ async function inspect(page, base, role, path, viewport) {
 }
 
 async function runRole(browser, base, role, account, routes) {
-  const context = await browser.newContext({ viewport:{ width:1440, height:900 }, acceptDownloads:true });
+  const context = await browser.newContext({ viewport:{ width:1440, height:900 }, acceptDownloads:true, ignoreHTTPSErrors:true });
   const page = await context.newPage();
   page.on('console', m => { if (m.type()==='error' && !m.text().startsWith('Failed to load resource:')) report.consoleErrors.push({ base, role, text:m.text() }); });
   page.on('response', r => { if (r.status() >= 400 && !(r.status() === 401 && r.url().includes('get_current_user.php'))) report.httpErrors.push({ base, role, status:r.status(), url:r.url() }); });
@@ -111,7 +132,7 @@ async function runRole(browser, base, role, account, routes) {
 
 async function scanner(browser, setup) {
   const qrImage = await QRCode.toDataURL(setup.qrData, { width:640, margin:4 });
-  const context = await browser.newContext({ viewport:{width:1440,height:900} });
+  const context = await browser.newContext({ viewport:{width:1440,height:900}, ignoreHTTPSErrors:true });
   await context.addInitScript(dataUrl => {
     navigator.mediaDevices.getUserMedia = async () => {
       const canvas=document.createElement('canvas'); canvas.width=720; canvas.height=720;
@@ -130,10 +151,42 @@ async function scanner(browser, setup) {
   await context.close();
 }
 
+async function transactionBalance(browser, setup) {
+  const context=await browser.newContext({ viewport:{width:1440,height:900}, acceptDownloads:true, ignoreHTTPSErrors:true });
+  const page=await context.newPage(); await login(page, local, setup.officer.school_id);
+  await navigate(page, `${local}/transactions`);
+  const row=page.getByText(`Release Fee ${stamp}`, { exact:false }).first().locator('xpath=ancestor::tr');
+  await row.waitFor({ state:'visible' });
+  const text=await row.innerText();
+  check('operator transaction row shows assessed, paid, and balance amounts', text.includes('₱500.00') && text.includes('₱125.00') && text.includes('₱375.00'), text);
+  await row.getByRole('button',{name:/details/i}).click();
+  const dialog=page.getByRole('dialog');
+  await dialog.waitFor({ state:'visible' });
+  await dialog.getByText('RELEASE-QA',{exact:false}).waitFor({state:'visible'});
+  const details=await dialog.innerText();
+  check('payment ledger shows method and reference', details.includes('Cash') && details.includes('RELEASE-QA'), details);
+  const receiptPromise=page.waitForEvent('download');
+  await dialog.getByRole('button',{name:/pdf receipt/i}).click();
+  const receipt=await receiptPromise; const receiptPath=fileURLToPath(new URL('payment-receipt.pdf',artifacts));
+  await receipt.saveAs(receiptPath); const receiptBytes=fs.readFileSync(receiptPath);
+  check('payment receipt is a nonempty valid PDF',receiptBytes.length>1000&&receiptBytes.subarray(0,4).toString()==='%PDF',`${receiptBytes.length} bytes`);
+  await context.close();
+}
+
 async function pdfDownload(browser, setup) {
-  const context=await browser.newContext({ viewport:{width:1440,height:900}, acceptDownloads:true });
+  const context=await browser.newContext({ viewport:{width:1440,height:900}, acceptDownloads:true, ignoreHTTPSErrors:true });
   const page=await context.newPage(); await login(page, local, setup.adviser.school_id);
   await page.goto(`${local}/reports/attendance-report`, { waitUntil:'domcontentloaded' });
+  for (const label of ['Choose Start Date','Choose End Date']) {
+    await page.getByLabel(label).click();
+    await page.locator('.react-datepicker__day--today').last().click();
+  }
+  await page.getByRole('button',{name:/generate report/i}).click();
+  await page.getByRole('button',{name:/export pdf|pdf/i}).waitFor({ state:'visible' });
+  await page.waitForFunction(() => {
+    const button=[...document.querySelectorAll('button')].find(el=>/export pdf|pdf/i.test(el.textContent||''));
+    return button && !button.disabled;
+  });
   const downloadPromise=page.waitForEvent('download');
   await page.getByRole('button',{name:/export pdf|pdf/i}).click();
   const download=await downloadPromise; const output=fileURLToPath(new URL('attendance-report.pdf', artifacts));
@@ -154,7 +207,8 @@ try {
   await runRole(browser, local, 'adviser', setupData.adviser, ['/dashboard','/members','/requirements','/transactions','/attendance/list','/attendance/config','/attendance/scan','/reports/attendance-report','/reports/transaction-report','/approvals','/history']);
   await runRole(browser, local, 'officer', setupData.officer, ['/dashboard','/members','/requirements','/transactions','/attendance/list','/attendance/config','/attendance/scan','/reports/attendance-report','/reports/transaction-report','/history']);
   await runRole(browser, local, 'member', setupData.member, ['/dashboard','/history']);
-  await runRole(browser, tunnel, 'member', setupData.member, ['/dashboard','/history']);
+  if (!skipTunnel) await runRole(browser, tunnel, 'member', setupData.member, ['/dashboard','/history']);
+  await transactionBalance(browser, setupData);
   await pdfDownload(browser, setupData);
   await scanner(browser, setupData);
 } finally {

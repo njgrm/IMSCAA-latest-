@@ -36,6 +36,8 @@ interface AttendanceRecord {
   end_time?: string;
   verifier_fname: string;
   verifier_lname: string;
+  pending_request_id?: number | null;
+  approval_status?: string | null;
 }
 
 type AttendanceStatus = 'present' | 'late' | 'excused' | 'absent';
@@ -62,6 +64,11 @@ const AttendanceList: React.FC = () => {
   });
 
   const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
+  const [statusHistory, setStatusHistory] = useState<Array<{
+    history_id: number; old_status: string | null; new_status: string;
+    change_reason: string | null; changed_at: string;
+    user_fname: string | null; user_lname: string | null;
+  }>>([]);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   // New states for request functionality
@@ -312,6 +319,12 @@ const AttendanceList: React.FC = () => {
   const openDetailModal = (record: AttendanceRecord) => {
     setSelectedRecord(record);
     setIsDetailModalOpen(true);
+    // Load the recorded status changes for this record.
+    setStatusHistory([]);
+    void fetch(`/my-app-server/get_attendance_history.php?attendance_id=${record.attendance_id}`, { credentials: 'include' })
+      .then(res => (res.ok ? res.json() : { history: [] }))
+      .then(data => setStatusHistory(Array.isArray(data?.history) ? data.history : []))
+      .catch(() => setStatusHistory([]));
   };
 
   const getStatusColor = (status: string) => {
@@ -461,8 +474,6 @@ const AttendanceList: React.FC = () => {
         };
       }
 
-      console.log('Submitting request:', requestData); // Debug log
-
       const response = await fetch('/my-app-server/add_attendance_request.php', {
         method: 'POST',
         credentials: 'include',
@@ -472,27 +483,23 @@ const AttendanceList: React.FC = () => {
         body: JSON.stringify(requestData),
       });
 
-      console.log('Response status:', response.status); // Debug log
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Response error:', errorText); // Debug log
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
       const result = await response.json();
-      console.log('Response result:', result); // Debug log
-      
       if (result.error) {
         throw new Error(result.error);
       }
 
-      toast.success(`${requestType === 'delete' ? 'Deletion' : 'Edit'} request submitted successfully`);
+      toast.success(result.existing ? 'This record already has a pending request.' : `${requestType === 'delete' ? 'Deletion' : 'Edit'} request submitted successfully`);
       setIsRequestModalOpen(false);
       setRequestingRecord(null);
       setRequestType(null);
       setRequestReason('');
       setEditForm({ attendance_status: 'present', notes: '' });
+      await fetchAttendanceRecords();
     } catch (error) {
       console.error('Error submitting request:', error);
       toast.error(`Failed to submit ${requestType} request: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -567,74 +574,6 @@ const AttendanceList: React.FC = () => {
                 </Button>
               )}
 
-              {/* Test Button - Only for advisers in development */}
-              <Button
-                onClick={async () => {
-                  try {
-                    const response = await fetch('/my-app-server/test_auto_absence.php', {
-                      credentials: 'include'
-                    });
-                    const data = await response.json();
-                    console.log('Auto absence test result:', data);
-                    
-                    if (data.success) {
-                      toast.info(
-                        `Found ${data.analysis.events_to_update_count} events needing status update and ${data.analysis.events_for_absence_count} ready for absence processing`,
-                        { autoClose: 6000 }
-                      );
-                    } else {
-                      toast.error(`Test failed: ${data.error}`);
-                    }
-                  } catch (error: any) {
-                    console.error('Test failed:', error);
-                    toast.error(`Test failed: ${error.message}`);
-                  }
-                }}
-                className="bg-orange-600 hover:bg-orange-500 text-white text-xs sm:text-sm px-3 sm:px-2 py-1 flex items-center whitespace-nowrap"
-              >
-                <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-                <span className="hidden sm:inline">Test Events</span>
-                <span className="sm:hidden">Test</span>
-              </Button>
-
-              {/* Debug Button - Only for advisers */}
-              <Button
-                onClick={async () => {
-                  try {
-                    const response = await fetch('/my-app-server/debug_auto_absence.php', {
-                      credentials: 'include'
-                    });
-                    const data = await response.json();
-                    console.log('Debug auto absence result:', data);
-                    
-                    if (data.success) {
-                      const debug = data.debug;
-                      console.log('Events with registrations:', debug.completed_events);
-                      console.log('All events:', debug.all_events);
-                      console.log('Registrations:', debug.registrations);
-                      
-                      toast.info(
-                        `Debug complete - check console for details. Found ${debug.completed_events?.length || 0} completed events`,
-                        { autoClose: 5000 }
-                      );
-                    } else {
-                      toast.error(`Debug failed: ${data.error}`);
-                    }
-                  } catch (error: any) {
-                    console.error('Debug failed:', error);
-                    toast.error(`Debug failed: ${error.message}`);
-                  }
-                }}
-                className="bg-purple-600 hover:bg-purple-500 text-white text-xs sm:text-sm px-3 sm:px-2 py-1 flex items-center whitespace-nowrap"
-              >
-                <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-                </svg>
-                <span className="hidden sm:inline">Debug</span>
-                <span className="sm:hidden">Debug</span>
-              </Button>
             </div>
           </div>
         </div>
@@ -782,19 +721,21 @@ const AttendanceList: React.FC = () => {
                             <button
                               aria-label={`Edit attendance for ${record.user_fname} ${record.user_lname}`}
                               onClick={() => requestEdit(record)}
+                              disabled={Boolean(record.pending_request_id)}
                               className="py-1 pt-2 pb-2 px-2 sm:px-3 flex items-center text-xs sm:text-sm font-medium text-center text-white bg-primary-600 rounded-lg hover:bg-primary-400 focus:z-10 focus:ring-4 focus:ring-primary-300 dark:bg-primary-600 dark:hover:bg-primary-400 transition-transform duration-200 ease-in-out transform hover:scale-105"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 -ml-0.5">
                                 <path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-8.4 8.4a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32l8.4-8.4z" />
                                 <path d="M5.25 5.25a3 3 0 00-3 3v10.5a3 3 0 003 3h10.5a3 3 0 003-3V13.5a.75.75 0 00-1.5 0v5.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5V8.25a1.5 1.5 0 011.5-1.5h5.25a.75.75 0 000-1.5H5.25z" />
                               </svg>
-                              <span className="hidden sm:inline">Edit</span>
+                              <span className="hidden sm:inline">{record.pending_request_id?'Pending':'Edit'}</span>
                             </button>
 
                             {/* Request Delete Button */}
                             <button
                               aria-label={`Delete attendance for ${record.user_fname} ${record.user_lname}`}
                               onClick={() => requestDeletion(record)}
+                              disabled={Boolean(record.pending_request_id)}
                               className="flex items-center justify-center px-4 py-2 text-sm border border-red-500 text-red-500 rounded-lg hover:bg-red-50  dark:hover:bg-red-900 whitespace-nowrap transition-transform duration-200 ease-in-out transform hover:scale-105"
                               >
                               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 -ml-0.5">
@@ -917,6 +858,34 @@ const AttendanceList: React.FC = () => {
                     </p>
                   </div>
                 )}
+
+                {/* Status change history */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Status History</label>
+                  {statusHistory.length === 0 ? (
+                    <p className="mt-1 text-sm italic text-gray-400">No status changes recorded.</p>
+                  ) : (
+                    <ul className="mt-1 space-y-1">
+                      {statusHistory.map(entry => (
+                        <li
+                          key={entry.history_id}
+                          className="rounded-lg bg-gray-50 p-2 text-sm text-gray-900 dark:bg-gray-700 dark:text-white"
+                        >
+                          <span className="font-medium">
+                            {entry.old_status ?? 'none'} &rarr; {entry.new_status}
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-gray-300">
+                            {' '}({entry.change_reason ?? 'manual'})
+                          </span>
+                          <span className="block text-xs text-gray-500 dark:text-gray-300">
+                            {new Date(entry.changed_at).toLocaleString()} &middot;{' '}
+                            {entry.user_fname ? `${entry.user_fname} ${entry.user_lname}` : 'System'}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
             </Modal.Body>
           </Modal>

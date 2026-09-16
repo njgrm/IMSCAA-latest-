@@ -26,40 +26,20 @@ try {
 
     $pdo->beginTransaction();
 
-    // Update event statuses based on current time
-    $updateStatusStmt = $pdo->prepare("
-        UPDATE requirements
-        SET status = CASE
-            WHEN requirement_type = 'event'
-                 AND status IN ('scheduled', 'ongoing')
-                 AND end_datetime < NOW()
-            THEN 'completed'
-            WHEN requirement_type = 'event'
-                 AND status = 'scheduled'
-                 AND start_datetime <= NOW()
-                 AND end_datetime > NOW()
-            THEN 'ongoing'
-            ELSE status
-        END
-        WHERE club_id = :club_id
-        AND requirement_type = 'event'
-        AND status IN ('scheduled', 'ongoing')
-    ");
+    // Event, activity and fee statuses all come from one shared rule.
+    $updatedEvents = refresh_requirement_statuses($pdo, (int)$actor['club_id']);
 
-    $updateStatusStmt->execute([':club_id' => $actor['club_id']]);
-    $updatedEvents = $updateStatusStmt->rowCount();
-
-    // Get details of updated events
+    // Recent requirements of every managed type, matching what the rule above updates.
     $detailsStmt = $pdo->prepare("
         SELECT
             requirement_id,
             title,
+            requirement_type,
             status,
             start_datetime,
             end_datetime
         FROM requirements
         WHERE club_id = :club_id
-        AND requirement_type = 'event'
         ORDER BY end_datetime DESC
         LIMIT 10
     ");

@@ -142,13 +142,7 @@ try {
       'fullName' => $fname . ' ' . $lname,
       'clubId' => $clubId
     ];
-    $ch = curl_init('http://localhost:3001/notify-registration');
-    curl_setopt($ch, CURLOPT_POST, 1);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, socket_service_headers());
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_exec($ch);
-    curl_close($ch);
+    socket_notify('/notify-registration', $data);
 
     exit;
   }

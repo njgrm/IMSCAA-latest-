@@ -113,6 +113,9 @@ try {
         ':attendance_id' => $attendanceId
     ]);
 
+    // Retain the previous status in the attendance audit trail.
+    record_attendance_status_change($pdo, $attendanceId, (string)$attendance['old_status'], $attendanceStatus, $currentUserId, 'manual');
+
     if ($updateStmt->rowCount() === 0) {
         // Check if record still exists
         $existsStmt = $pdo->prepare("SELECT attendance_id FROM attendance_records WHERE attendance_id = :attendance_id");
