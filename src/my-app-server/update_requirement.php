@@ -62,6 +62,15 @@ if ($requirement_type === 'fee' && $amount_due <= 0) {
 
 try {
     $pdo = db();
+
+    // A requirement belonging to another club must never be touched. This also guards
+    // the assignee reconciliation below, which is scoped by requirement_id alone.
+    $owned = $pdo->prepare("SELECT requirement_id FROM requirements WHERE requirement_id = ? AND club_id = ?");
+    $owned->execute([$requirement_id, $club_id]);
+    if (!$owned->fetchColumn()) {
+        api_error(404, 'Requirement was not found in this club.', 'REQUIREMENT_NOT_FOUND');
+    }
+
     $pdo->beginTransaction();
 
     // Update requirement

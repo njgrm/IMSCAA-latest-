@@ -151,7 +151,7 @@ if ($request_ids && is_array($request_ids)) {
                         $updateStmt = $pdo->prepare($updateSql);
                         $updateStmt->execute($updateValues);
 
-                        if (isset($newData['attendance_status'])) {
+                        if (isset($newData['attendance_status']) && $updateStmt->rowCount() > 0) {
                             record_attendance_status_change($pdo, (int)$target_id, $priorStatus === false ? null : (string)$priorStatus, (string)$newData['attendance_status'], (int)$_SESSION['user_id'], 'correction');
                         }
                     }
@@ -300,7 +300,7 @@ try {
                 $updateStmt = $pdo->prepare($updateSql);
                 $updateStmt->execute($updateValues);
 
-                if (isset($newData['attendance_status'])) {
+                if (isset($newData['attendance_status']) && $updateStmt->rowCount() > 0) {
                     record_attendance_status_change($pdo, (int)$target_id, $priorStatus === false ? null : (string)$priorStatus, (string)$newData['attendance_status'], (int)$_SESSION['user_id'], 'correction');
                 }
             }
