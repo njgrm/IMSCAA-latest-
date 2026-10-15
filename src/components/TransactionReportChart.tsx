@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useContext } from "react";
 import ReactApexChart from "react-apexcharts";
 import { ApexOptions } from "apexcharts";
+import { ThemeContext } from "../theme/ThemeContext";
+import { chartTheme } from "../theme/chartTheme";
 
 interface ChartProps {
   paid: number;
@@ -9,23 +11,28 @@ interface ChartProps {
 }
 
 const TransactionReportChart: React.FC<ChartProps> = ({ paid, unpaid, partial }) => {
+  const { isDark } = useContext(ThemeContext);
+  const palette = chartTheme(isDark);
   const series = [paid, unpaid, partial];
   const options: ApexOptions = {
     chart: {
-        type: "pie" as const,
-        fontFamily: "Inter, sans-serif",
+      type: "pie" as const,
+      fontFamily: "Inter, sans-serif",
+      foreColor: palette.text,
       },
     labels: ["Paid", "Unpaid", "Partial"],
     colors: ["#059669", "#f05252", "#f59e42"],
     legend: {
       position: "bottom",
       fontSize: '16px',
-      labels: { colors: "#6b7280", useSeriesColors: false },
+      labels: { colors: palette.text, useSeriesColors: false },
     },
     dataLabels: {
       enabled: true,
       style: { fontFamily: "Inter, sans-serif", fontSize: '12px' },
     },
+    theme: { mode: palette.mode },
+    tooltip: { theme: palette.tooltip },
   };
 
   return (

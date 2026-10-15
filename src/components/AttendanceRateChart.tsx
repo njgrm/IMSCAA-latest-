@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useContext } from "react";
 import ReactApexChart from "react-apexcharts";
 import { ApexOptions } from "apexcharts";
+import { ThemeContext } from "../theme/ThemeContext";
+import { chartTheme } from "../theme/chartTheme";
 
 interface AttendanceRateData {
   label: string;
@@ -17,6 +19,8 @@ interface AttendanceRateChartProps {
 }
 
 const AttendanceRateChart: React.FC<AttendanceRateChartProps> = ({ data }) => {
+  const { isDark } = useContext(ThemeContext);
+  const palette = chartTheme(isDark);
   const sortedData = [...data].sort((a, b) => b.attendanceRate - a.attendanceRate);
   
   const series = [
@@ -31,6 +35,7 @@ const AttendanceRateChart: React.FC<AttendanceRateChartProps> = ({ data }) => {
       type: "line",
       fontFamily: "Inter, sans-serif",
       toolbar: { show: false },
+      foreColor: palette.text,
     },
     stroke: {
       curve: 'smooth',
@@ -43,11 +48,11 @@ const AttendanceRateChart: React.FC<AttendanceRateChartProps> = ({ data }) => {
     xaxis: {
       type: 'category',
       labels: { 
-        style: { fontFamily: "Inter, sans-serif", fontSize: '12px', colors: "#6b7280" },
+        style: { fontFamily: "Inter, sans-serif", fontSize: '12px', colors: palette.text },
         rotate: -45,
         maxHeight: 120,
       },
-      title: { text: "Events", style: { fontWeight: 600, fontSize: '14px', color: "#374151" } },
+      title: { text: "Events", style: { fontWeight: 600, fontSize: '14px', color: palette.title } },
     },
     yaxis: {
       min: 0,
@@ -57,13 +62,13 @@ const AttendanceRateChart: React.FC<AttendanceRateChartProps> = ({ data }) => {
         formatter: function(val: number) {
           return val.toFixed(0) + '%';
         },
-        style: { fontFamily: "Inter, sans-serif", fontSize: '12px', colors: "#6b7280" }
+        style: { fontFamily: "Inter, sans-serif", fontSize: '12px', colors: palette.text }
       },
-      title: { text: "Attendance Rate (%)", style: { fontWeight: 600, fontSize: '14px', color: "#374151" } },
+      title: { text: "Attendance Rate (%)", style: { fontWeight: 600, fontSize: '14px', color: palette.title } },
     },
     colors: ["#2563eb"],
     grid: { 
-      borderColor: "#e5e7eb", 
+      borderColor: palette.grid,
       strokeDashArray: 4,
       yaxis: {
         lines: {
@@ -72,6 +77,7 @@ const AttendanceRateChart: React.FC<AttendanceRateChartProps> = ({ data }) => {
       }
     },
     tooltip: {
+      theme: palette.tooltip,
       x: {
         show: true,
       },
@@ -100,6 +106,7 @@ const AttendanceRateChart: React.FC<AttendanceRateChartProps> = ({ data }) => {
         },
       ],
     },
+    theme: { mode: palette.mode },
   };
 
   return (

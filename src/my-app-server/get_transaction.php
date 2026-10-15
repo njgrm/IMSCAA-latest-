@@ -47,18 +47,29 @@ try {
             t.requirement_id,
             CAST(t.amount_due   AS DECIMAL(10,2)) AS amount_due,
             CAST(t.amount_paid  AS DECIMAL(10,2)) AS amount_paid,
+            CAST(GREATEST(t.amount_due - t.amount_paid, 0) AS DECIMAL(10,2)) AS balance,
             t.payment_status,
-            t.payment_method,
+            (SELECT p.payment_method
+               FROM transaction_payments p
+              WHERE p.transaction_id=t.transaction_id AND p.is_voided=0
+              ORDER BY p.payment_date DESC,p.payment_id DESC LIMIT 1) AS payment_method,
             t.fee_description AS description,
             DATE_FORMAT(t.due_date,    '%Y-%m-%d %H:%i:%s') AS due_date,
             t.verified_by,
             DATE_FORMAT(t.date_added,  '%Y-%m-%d %H:%i:%s') AS date,
-            r.requirement_type AS type
+            r.requirement_type AS type,
+            t.is_voided,
+            pending.request_id AS pending_request_id,
+            pending.status AS approval_status,
+            (SELECT COUNT(*) FROM transaction_payments p WHERE p.transaction_id=t.transaction_id AND p.is_voided=0) AS payment_count
         FROM transactions t
         JOIN requirements r 
           ON t.requirement_id = r.requirement_id
          AND r.club_id = :clubId
-        WHERE 1=1
+        LEFT JOIN approval_requests pending
+          ON pending.club_id=r.club_id AND pending.type='transaction'
+         AND pending.target_id=t.transaction_id AND pending.status='pending'
+        WHERE t.is_voided=0
     ";
     $params = [':clubId' => $clubId];
 

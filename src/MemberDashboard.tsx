@@ -427,6 +427,9 @@ const MemberDashboard: React.FC = () => {
                               </svg>
                               Paid: ₱{amountPaid.toFixed(2)} / ₱{amountDue.toFixed(2)}
                             </div>
+                            <div className="font-medium text-gray-300">
+                              Balance remaining: ₱{Math.max(amountDue - amountPaid, 0).toFixed(2)}
+                            </div>
                           </div>
                           
                           {tx.description && (

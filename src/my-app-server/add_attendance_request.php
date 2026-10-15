@@ -91,6 +91,13 @@ try {
         $type = 'attendance';
     }
 
+    $existing = $pdo->prepare("SELECT request_id,status FROM approval_requests WHERE club_id=? AND type=? AND target_id=? AND status='pending' LIMIT 1");
+    $existing->execute([$clubId,$type,$targetId]);
+    if ($row=$existing->fetch(PDO::FETCH_ASSOC)) {
+        echo json_encode(['success'=>true,'message'=>'This record already has a pending request','request_id'=>(int)$row['request_id'],'existing'=>true,'status'=>'pending']);
+        exit;
+    }
+
     // Insert the approval request
     $stmt = $pdo->prepare("
         INSERT INTO approval_requests
@@ -101,23 +108,23 @@ try {
     $attendanceRecordId = ($type === 'attendance') ? $targetId : null;
     $newDataJson = $newData ? json_encode($newData) : null;
 
-    $stmt->execute([
-        $type,
-        $approvalType,
-        $targetId,
-        $clubId,
-        $userId,
-        $reason,
-        $originalStatus,
-        $requestedStatus,
-        $attendanceRecordId,
-        $newDataJson
-    ]);
+    try {
+        $stmt->execute([$type,$approvalType,$targetId,$clubId,$userId,$reason,$originalStatus,$requestedStatus,$attendanceRecordId,$newDataJson]);
+    } catch (PDOException $e) {
+        if ((string)$e->getCode() !== '23000') throw $e;
+        $existing->execute([$clubId,$type,$targetId]);
+        $row=$existing->fetch(PDO::FETCH_ASSOC);
+        if (!$row) throw $e;
+        echo json_encode(['success'=>true,'message'=>'This record already has a pending request','request_id'=>(int)$row['request_id'],'existing'=>true,'status'=>'pending']);
+        exit;
+    }
 
     echo json_encode([
         'success' => true,
         'message' => ucfirst($approvalType) . ' request submitted successfully',
-        'request_id' => $pdo->lastInsertId()
+        'request_id' => (int)$pdo->lastInsertId(),
+        'existing' => false,
+        'status' => 'pending'
     ]);
 
 } catch (PDOException $e) {

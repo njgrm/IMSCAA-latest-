@@ -47,9 +47,14 @@ try {
       user_year AS year,
       user_section AS section,
       avatar,
-      club_id
+      users.club_id,
+      pending.request_id AS pending_request_id,
+      pending.status AS approval_status
     FROM `users`
-    WHERE club_id = ?
+    LEFT JOIN approval_requests pending
+      ON pending.club_id=users.club_id AND pending.type='user'
+     AND pending.target_id=users.user_id AND pending.status='pending'
+    WHERE users.club_id = ?
       AND LOWER(role) <> 'adviser'
     ORDER BY user_lname, user_fname
   ");

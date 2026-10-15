@@ -69,8 +69,10 @@ if ($requirement_type === 'fee' && $amount_due <= 0) {
     exit;
 }
 
-if (strtotime($end_datetime) <= strtotime($start_datetime)) {
-    api_error(400, 'End date must be after start date.', 'INVALID_DATE_RANGE');
+// The form only offers date inputs, so a one-day requirement legitimately has
+// the same start and end date. Only a strictly earlier end is rejected.
+if (strtotime($end_datetime) < strtotime($start_datetime)) {
+    api_error(400, 'End date cannot be before start date.', 'INVALID_DATE_RANGE');
 }
 
 try {

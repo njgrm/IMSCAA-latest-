@@ -1,0 +1,20 @@
+{
+  "license": "https://unsplash.com/license",
+  "accessed": "2026-09-09",
+  "usage": "Disposable IMSCCA presentation capture fixtures only",
+  "assets": [
+    { "file": "portrait-01.jpg", "photographer": "Icons8 Team", "source": "https://unsplash.com/photos/FcLyt7lW5wg" },
+    { "file": "portrait-02.jpg", "photographer": "Jurica Koletic", "source": "https://unsplash.com/photos/7YVZYZeITc8" },
+    { "file": "portrait-03.jpg", "photographer": "Christina @ wocintechchat.com", "source": "https://unsplash.com/photos/0Zx1bDv5BNY" },
+    { "file": "portrait-04.jpg", "photographer": "Jake Nackos", "source": "https://unsplash.com/photos/IF9TK5Uy-KI" },
+    { "file": "portrait-05.jpg", "photographer": "Toa Heftiba", "source": "https://unsplash.com/photos/O3ymvT7Wf9U" },
+    { "file": "portrait-06.jpg", "photographer": "Joseph Gonzalez", "source": "https://unsplash.com/photos/iFgRcqHznqg" },
+    { "file": "portrait-07.jpg", "photographer": "Good Faces", "source": "https://unsplash.com/photos/DavJROC1lBM" },
+    { "file": "portrait-08.jpg", "photographer": "Nartan Buyukyildiz", "source": "https://unsplash.com/photos/hr_feH2URs0" },
+    { "file": "event-01.jpg", "photographer": "Jakob Dalbjorn", "source": "https://unsplash.com/photos/cuKJre3nyYc" },
+    { "file": "event-02.jpg", "photographer": "Felicia Buitenwerf", "source": "https://unsplash.com/photos/Qs_Zkak27Jk" },
+    { "file": "event-03.jpg", "photographer": "Jaime Lopes", "source": "https://unsplash.com/photos/0RDBOAdnbWM" },
+    { "file": "event-04.jpg", "photographer": "Claudio Schwarz", "source": "https://unsplash.com/photos/_wDZkpybAfY" },
+    { "file": "event-05.jpg", "photographer": "CHUTTERSNAP", "source": "https://unsplash.com/photos/cX2vElQ5aHk" }
+  ]
+}

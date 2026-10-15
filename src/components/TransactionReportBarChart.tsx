@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useContext } from "react";
 import ReactApexChart from "react-apexcharts";
 import { ApexOptions } from "apexcharts";
+import { ThemeContext } from "../theme/ThemeContext";
+import { chartTheme } from "../theme/chartTheme";
 
 interface BarChartDatum {
   label: string;
@@ -15,6 +17,8 @@ interface BarChartProps {
 }
 
 const TransactionReportBarChart: React.FC<BarChartProps> = ({ data }) => {
+  const { isDark } = useContext(ThemeContext);
+  const palette = chartTheme(isDark);
   const series = [
     {
       name: "Paid",
@@ -37,6 +41,7 @@ const TransactionReportBarChart: React.FC<BarChartProps> = ({ data }) => {
       stackType: '100%',
       fontFamily: "Inter, sans-serif",
       toolbar: { show: false },
+      foreColor: palette.text,
     },
     plotOptions: {
       bar: {
@@ -47,14 +52,14 @@ const TransactionReportBarChart: React.FC<BarChartProps> = ({ data }) => {
     },
     stroke: {
       width: 1,
-      colors: ['#fff']
+      colors: [palette.stroke]
     },
     fill: {
       opacity: 1
     },
     xaxis: {
       categories: data.map(d => d.label),
-      labels: { style: { fontFamily: "Inter, sans-serif", fontSize: '13px', colors: "#6b7280" } },
+      labels: { style: { fontFamily: "Inter, sans-serif", fontSize: '13px', colors: palette.text } },
     },
     yaxis: {
       min: 0,
@@ -62,21 +67,23 @@ const TransactionReportBarChart: React.FC<BarChartProps> = ({ data }) => {
       tickAmount: 5,
       labels: {
         formatter: val => `${val}%`,
-        style: { fontFamily: "Inter, sans-serif", fontSize: '13px', colors: "#6b7280" }
+        style: { fontFamily: "Inter, sans-serif", fontSize: '13px', colors: palette.text }
       },
-      title: { text: "Percent (%)", style: { fontWeight: 600, fontSize: '14px', color: "#374151" } },
+      title: { text: "Percent (%)", style: { fontWeight: 600, fontSize: '14px', color: palette.title } },
     },
     legend: {
       position: "top",
       horizontalAlign: 'left',
       offsetX: 40,
       fontSize: '15px',
-      labels: { colors: "#6b7280", useSeriesColors: false },
+      labels: { colors: palette.text, useSeriesColors: false },
     },
     colors: ["#059669", "#f59e42", "#f05252"],
     dataLabels: { enabled: false },
-    grid: { borderColor: "#e5e7eb", strokeDashArray: 4 },
+    grid: { borderColor: palette.grid, strokeDashArray: 4 },
+    theme: { mode: palette.mode },
     tooltip: {
+      theme: palette.tooltip,
       y: {
         formatter: function (val: number, opts: any) {
           const seriesIdx = opts.seriesIndex;

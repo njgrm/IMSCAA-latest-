@@ -93,15 +93,47 @@ CREATE TABLE `transactions` (
   `verified_by` int(11) DEFAULT NULL,
   `date_added` datetime(6) DEFAULT current_timestamp(6),
   `fee_description` text NOT NULL,
+  `is_voided` tinyint(1) NOT NULL DEFAULT 0,
+  `voided_at` datetime(6) DEFAULT NULL,
+  `voided_by` int(11) DEFAULT NULL,
+  `void_reason` varchar(500) DEFAULT NULL,
   PRIMARY KEY (`transaction_id`),
+  UNIQUE KEY `uk_transactions_user_requirement` (`user_id`,`requirement_id`),
   KEY `idx_transactions_user` (`user_id`),
   KEY `idx_transactions_requirement` (`requirement_id`),
   KEY `idx_transactions_verified_by` (`verified_by`),
+  KEY `idx_transactions_voided_by` (`voided_by`),
   KEY `idx_transactions_status` (`payment_status`),
   KEY `idx_transactions_due` (`due_date`),
   CONSTRAINT `fk_transactions_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_transactions_requirement` FOREIGN KEY (`requirement_id`) REFERENCES `requirements` (`requirement_id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_transactions_verified_by` FOREIGN KEY (`verified_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+  CONSTRAINT `fk_transactions_verified_by` FOREIGN KEY (`verified_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_transactions_voided_by` FOREIGN KEY (`voided_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `transaction_payments` (
+  `payment_id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `transaction_id` int(11) NOT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  `payment_method` varchar(50) NOT NULL,
+  `reference_number` varchar(100) DEFAULT NULL,
+  `note` varchar(500) DEFAULT NULL,
+  `payment_date` datetime(6) NOT NULL DEFAULT current_timestamp(6),
+  `recorded_by` int(11) DEFAULT NULL,
+  `idempotency_key` varchar(64) NOT NULL,
+  `is_voided` tinyint(1) NOT NULL DEFAULT 0,
+  `voided_at` datetime(6) DEFAULT NULL,
+  `voided_by` int(11) DEFAULT NULL,
+  `void_reason` varchar(500) DEFAULT NULL,
+  PRIMARY KEY (`payment_id`),
+  UNIQUE KEY `uk_transaction_payment_idempotency` (`transaction_id`,`idempotency_key`),
+  KEY `idx_transaction_payments_transaction` (`transaction_id`,`payment_date`),
+  KEY `idx_transaction_payments_recorded_by` (`recorded_by`),
+  KEY `idx_transaction_payments_voided_by` (`voided_by`),
+  CONSTRAINT `fk_transaction_payments_transaction` FOREIGN KEY (`transaction_id`) REFERENCES `transactions` (`transaction_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_transaction_payments_recorded_by` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_transaction_payments_voided_by` FOREIGN KEY (`voided_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `chk_transaction_payments_amount` CHECK (`amount` > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE `invite_links` (
@@ -144,6 +176,7 @@ CREATE TABLE `approval_requests` (
   `requested_at` datetime DEFAULT current_timestamp(),
   `approved_by` int(11) DEFAULT NULL,
   `approved_at` datetime DEFAULT NULL,
+  `pending_target_key` varchar(80) GENERATED ALWAYS AS (CASE WHEN `status` = 'pending' THEN concat(`type`,':',`target_id`) ELSE NULL END) STORED,
   PRIMARY KEY (`request_id`),
   KEY `idx_approval_requests_type_target` (`type`,`target_id`),
   KEY `idx_approval_requests_club` (`club_id`),
@@ -151,6 +184,7 @@ CREATE TABLE `approval_requests` (
   KEY `idx_approval_requests_approved_by` (`approved_by`),
   KEY `idx_approval_requests_status` (`status`),
   KEY `idx_approval_requests_type` (`approval_type`,`status`),
+  UNIQUE KEY `uk_approval_requests_pending_target` (`club_id`,`pending_target_key`),
   CONSTRAINT `fk_approval_requests_club` FOREIGN KEY (`club_id`) REFERENCES `club` (`club_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_approval_requests_requested_by` FOREIGN KEY (`requested_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_approval_requests_approved_by` FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL

@@ -49,6 +49,10 @@ $status     = isset($input['payment_status']) &&
               : null;
 $method     = isset($input['payment_method'])   ? trim($input['payment_method'])   : null;
 
+if ($amountPaid !== null || $status !== null || $method !== null) {
+    api_error(410, 'Direct payment updates were retired. Use the payment ledger endpoints.', 'PAYMENT_UPDATE_RETIRED');
+}
+
 if ($feeDesc===null && $amountPaid===null && $status===null && $method===null) {
     http_response_code(400);
     echo json_encode(['error' => 'No fields to update']);
@@ -68,18 +72,6 @@ try {
         $set[] = "t.fee_description = :feeDesc";
         $params[':feeDesc'] = $feeDesc;
     }
-    if ($amountPaid !== null) {
-        $set[] = "t.amount_paid = :amountPaid";
-        $params[':amountPaid'] = $amountPaid;
-    }
-    if ($status !== null) {
-        $set[] = "t.payment_status = :status";
-        $params[':status'] = $status;
-    }
-    if ($method !== null) {
-        $set[] = "t.payment_method = :method";
-        $params[':method'] = $method;
-    }
     // always update verifier
     $set[] = "t.verified_by = :verifiedBy";
     $params[':verifiedBy'] = $verifiedBy;
@@ -91,9 +83,6 @@ try {
     $check->execute(array_merge([(int)$actor['club_id']], $ids));
     $owned = $check->fetchAll(PDO::FETCH_ASSOC);
     if (count($owned) !== count(array_unique($ids))) api_error(404, 'One or more transactions were not found in this club.', 'TRANSACTION_NOT_FOUND');
-    foreach ($owned as $transaction) {
-        validate_payment_state($amountPaid ?? (float)$transaction['amount_paid'], $status ?? (string)$transaction['payment_status'], (float)$transaction['amount_due']);
-    }
 
     $updateSql = "
         UPDATE transactions t

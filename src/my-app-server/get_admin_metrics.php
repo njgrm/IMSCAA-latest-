@@ -41,7 +41,7 @@ try {
         'SELECT COUNT(*)
          FROM transactions t
          INNER JOIN requirements r ON r.requirement_id = t.requirement_id
-         WHERE r.club_id = ?'
+         WHERE r.club_id = ? AND t.is_voided = 0'
     );
     $transactionsStmt->execute([$clubId]);
     $totalTransactions = (int)$transactionsStmt->fetchColumn();
@@ -50,7 +50,7 @@ try {
         "SELECT COUNT(*)
          FROM transactions t
          INNER JOIN requirements r ON r.requirement_id = t.requirement_id
-         WHERE r.club_id = ? AND t.payment_status IN ('unpaid', 'partial')"
+         WHERE r.club_id = ? AND t.is_voided = 0 AND t.payment_status IN ('unpaid', 'partial')"
     );
     $pendingStmt->execute([$clubId]);
     $pendingPayments = (int)$pendingStmt->fetchColumn();
@@ -74,7 +74,7 @@ try {
          FROM transactions t
          INNER JOIN requirements r ON r.requirement_id = t.requirement_id
          INNER JOIN users u ON u.user_id = t.user_id
-         WHERE r.club_id = ?
+         WHERE r.club_id = ? AND t.is_voided = 0
          ORDER BY t.date_added DESC
          LIMIT 5'
     );

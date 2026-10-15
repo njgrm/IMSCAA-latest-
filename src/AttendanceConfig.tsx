@@ -107,7 +107,6 @@ const AttendanceConfig: React.FC = () => {
       const data = await response.json();
       setEvents(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('Error fetching events:', error);
       toast.error('Failed to load events');
     }
   };
@@ -124,7 +123,6 @@ const AttendanceConfig: React.FC = () => {
       const data = await response.json();
       setTimeSlots(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('Error fetching time slots:', error);
       toast.error('Failed to load time slots');
     } finally {
       setLoading(false);
@@ -198,7 +196,6 @@ const AttendanceConfig: React.FC = () => {
       ...slotForm
     };
     
-    console.log('Submitting edit data:', submitData);
 
     try {
       const response = await fetch('/my-app-server/update_time_slot.php', {
@@ -209,7 +206,6 @@ const AttendanceConfig: React.FC = () => {
       });
 
       const data = await response.json();
-      console.log('Backend response:', data);
       
       if (!response.ok) {
         throw new Error(data.error || 'Failed to update time slot');
@@ -221,7 +217,6 @@ const AttendanceConfig: React.FC = () => {
       setSlotForm({ slot_name: '', start_time: '', end_time: '', date: '' });
       await fetchTimeSlots();
     } catch (error: any) {
-      console.error('Edit error:', error);
       toast.error(error.message || 'Failed to update time slot');
     }
   };
@@ -279,9 +274,6 @@ const AttendanceConfig: React.FC = () => {
 
   // Open edit modal
   const openEditModal = (slot: TimeSlot) => {
-    console.log('Opening edit modal for slot:', slot);
-    console.log('Original start_time:', slot.start_time, 'Formatted:', formatTimeForInput(slot.start_time));
-    console.log('Original end_time:', slot.end_time, 'Formatted:', formatTimeForInput(slot.end_time));
     
     setEditingSlot(slot);
     setSlotForm({

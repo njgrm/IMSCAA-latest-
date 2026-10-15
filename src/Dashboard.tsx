@@ -764,7 +764,7 @@ const Dashboard: React.FC = () => {
               {(isAdminRole || isMember) && (
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 hover:shadow-lg transition-shadow duration-200 lg:col-span-2">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-bold text-primary-600 dark:text-primary-400">My Payments</h2>
+                    <h2 className="text-lg font-bold text-primary-600 dark:text-primary-400">{isAdminRole ? 'Recent Transactions' : 'My Payments'}</h2>
                     <Link 
                       to="/transactions" 
                       className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
@@ -773,7 +773,31 @@ const Dashboard: React.FC = () => {
                     </Link>
                   </div>
                   
-                  {memberStatsLoading ? (
+                  {isAdminRole ? (
+                    metricsLoading ? (
+                      <div className="flex h-32 items-center justify-center">
+                        <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-primary-600 dark:border-primary-400"></div>
+                        <span className="ml-2 text-sm text-gray-600 dark:text-gray-300">Loading transactions...</span>
+                      </div>
+                    ) : recentTransactions.length === 0 ? (
+                      <div className="py-8 text-center text-sm text-gray-600 dark:text-gray-300">No club transactions found.</div>
+                    ) : (
+                      <div className="divide-y divide-gray-200 overflow-y-auto dark:divide-gray-700">
+                        {recentTransactions.map((transaction) => {
+                          const due = Number(transaction.amount_due) || 0;
+                          const paid = Number(transaction.amount_paid) || 0;
+                          const balance = Math.max(due - paid, 0);
+                          return <div key={transaction.transaction_id} className="py-3 first:pt-0">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0"><p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{transaction.user_fname} {transaction.user_lname}</p><p className="truncate text-xs text-gray-600 dark:text-gray-300">{transaction.requirement_title}</p></div>
+                              <span className={`rounded-full px-2 py-1 text-xs font-medium capitalize ${transaction.payment_status === 'paid' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : transaction.payment_status === 'partial' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`}>{transaction.payment_status}</span>
+                            </div>
+                            <div className="mt-2 grid grid-cols-3 gap-2 text-xs"><span className="text-gray-600 dark:text-gray-300">Due <strong className="block text-gray-900 dark:text-white">₱{due.toFixed(2)}</strong></span><span className="text-gray-600 dark:text-gray-300">Paid <strong className="block text-gray-900 dark:text-white">₱{paid.toFixed(2)}</strong></span><span className="text-gray-600 dark:text-gray-300">Balance <strong className="block text-gray-900 dark:text-white">₱{balance.toFixed(2)}</strong></span></div>
+                          </div>;
+                        })}
+                      </div>
+                    )
+                  ) : memberStatsLoading ? (
                     <div className="flex items-center justify-center h-32">
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 dark:border-primary-400"></div>
                       <span className="ml-2 text-gray-500 dark:text-gray-400 text-sm">Loading my payments...</span>
@@ -822,6 +846,9 @@ const Dashboard: React.FC = () => {
                                   </svg>
             
                                   Paid: ₱{amountPaid.toFixed(2)} / ₱{amountDue.toFixed(2)}
+                                </div>
+                                <div className="font-medium text-gray-700 dark:text-gray-300">
+                                  Balance remaining: ₱{Math.max(amountDue - amountPaid, 0).toFixed(2)}
                                 </div>
                               </div>
                               

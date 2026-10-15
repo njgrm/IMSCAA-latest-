@@ -32,12 +32,12 @@ $input = json_decode(file_get_contents('php://input'), true);
 $userIds        = $input['user_ids']        ?? [];
 $reqIds         = $input['requirement_ids'] ?? [];
 $feeDesc        = trim($input['fee_description'] ?? '');
-$amountPaid     = isset($input['amount_paid']) 
-                  ? (float)$input['amount_paid'] : 0.0;
-$requestedStatus = $input['payment_status'] ?? 'unpaid';
-$paymentStatus  = in_array($requestedStatus, ['unpaid','partial','paid'], true)
-                  ? $requestedStatus : 'unpaid';
-$paymentMethod  = trim($input['payment_method'] ?? '');
+$amountPaid = (float)($input['amount_paid'] ?? 0);
+$requestedStatus = (string)($input['payment_status'] ?? 'unpaid');
+$paymentMethod = trim((string)($input['payment_method'] ?? ''));
+if ($amountPaid != 0.0 || $requestedStatus !== 'unpaid' || $paymentMethod !== '') {
+    api_error(400, 'Create obligations as unpaid, then use Record Payment.', 'PAYMENT_REQUIRES_LEDGER');
+}
 
 if (!is_array($userIds) || !count($userIds)
  || !is_array($reqIds)  || !count($reqIds)) 
@@ -88,10 +88,6 @@ try {
         api_error(404, 'One or more selected requirements do not belong to this club.', 'REQUIREMENT_NOT_FOUND_IN_CLUB');
       }
     }
-    foreach ($reqMap as $requirement) {
-        validate_payment_state($amountPaid, $paymentStatus, (float)$requirement['amount_due']);
-    }
-
     $pdo->beginTransaction();
     $sql = "
       INSERT INTO transactions
@@ -100,11 +96,14 @@ try {
          fee_description, due_date, verified_by, date_added)
       VALUES
         (:user_id, :req_id, :amt_due,
-         :amt_paid, :status, :method,
+         0, 'unpaid', NULL,
          :fdesc,   :due_date, :verified_by, NOW())
+      ON DUPLICATE KEY UPDATE transaction_id=LAST_INSERT_ID(transaction_id)
     ";
     $ins = $pdo->prepare($sql);
 
+    $created = [];
+    $existing = [];
     foreach ($normalizedUserIds as $uid) {
       $u = (int)$uid;
       foreach ($normalizedReqIds as $rid) {
@@ -113,18 +112,18 @@ try {
           ':user_id'     => $u,
           ':req_id'      => $r,
           ':amt_due'     => $reqMap[$r]['amount_due'],
-          ':amt_paid'    => $amountPaid,
-          ':status'      => $paymentStatus,
-          ':method'      => $paymentMethod,
           ':fdesc'       => $feeDesc,
           ':due_date'    => $reqMap[$r]['end_datetime'],
           ':verified_by' => $verifiedBy,
         ]);
+        $transactionId = (int)$pdo->lastInsertId();
+        if ($ins->rowCount() === 1) $created[] = $transactionId;
+        else $existing[] = $transactionId;
       }
     }
 
     $pdo->commit();
-    echo json_encode(['success'=>true]);
+    echo json_encode(['success'=>true,'created_ids'=>$created,'existing_ids'=>$existing]);
 
 } catch (Exception $e) {
     if (isset($pdo) && $pdo->inTransaction()) {

@@ -438,7 +438,10 @@ const Requirements: React.FC = () => {
       status: r.status,
       club_id: r.club_id,
       amount_due: r.amount_due,
-       req_picture: r.req_picture || placeholderImage
+      // Seed '' rather than the placeholder asset URL: the card already falls
+      // back to the placeholder at render, and saving it would store the asset
+      // path in the database as if it were a real picture.
+      req_picture: r.req_picture || ""
     }));
     // Seed the payer/attendee selection from what is currently assigned.
     setSelectedUsers(Array.isArray(r.assigned_user_ids) ? r.assigned_user_ids : []);

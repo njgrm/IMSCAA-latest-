@@ -48,9 +48,23 @@ try {
     $target = $pdo->prepare($checks[$type]);
     $target->execute([$target_id, $actor['club_id']]);
     if (!$target->fetchColumn()) api_error(404, 'Target not found in this club.', 'TARGET_NOT_FOUND');
-    $stmt = $pdo->prepare("INSERT INTO approval_requests (type, target_id, club_id, requested_by, reason) VALUES (?, ?, ?, ?, ?)");
-    $stmt->execute([$type, $target_id, $_SESSION['club_id'], $_SESSION['user_id'], $reason]);
-    echo json_encode(['success' => true]);
+    $existing = $pdo->prepare("SELECT request_id,status FROM approval_requests WHERE club_id=? AND type=? AND target_id=? AND status='pending' LIMIT 1");
+    $existing->execute([$actor['club_id'], $type, $target_id]);
+    if ($row = $existing->fetch(PDO::FETCH_ASSOC)) {
+        echo json_encode(['success'=>true,'request_id'=>(int)$row['request_id'],'existing'=>true,'status'=>'pending']);
+        exit;
+    }
+    try {
+        $stmt = $pdo->prepare("INSERT INTO approval_requests (type, target_id, club_id, requested_by, reason) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$type, $target_id, $actor['club_id'], $actor['user_id'], $reason]);
+        echo json_encode(['success'=>true,'request_id'=>(int)$pdo->lastInsertId(),'existing'=>false,'status'=>'pending']);
+    } catch (PDOException $e) {
+        if ((string)$e->getCode() !== '23000') throw $e;
+        $existing->execute([$actor['club_id'], $type, $target_id]);
+        $row = $existing->fetch(PDO::FETCH_ASSOC);
+        if (!$row) throw $e;
+        echo json_encode(['success'=>true,'request_id'=>(int)$row['request_id'],'existing'=>true,'status'=>'pending']);
+    }
 } catch (PDOException $e) {
     http_response_code(500);
     error_log('IMSCCA request failure: ' . $e->getMessage());

@@ -79,6 +79,9 @@ const EventAttendanceReport: React.FC = () => {
   const tableRef = useRef<HTMLDivElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [reportGenerated, setReportGenerated] = useState(false);
+  const [appliedDateRange, setAppliedDateRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
+  const [appliedFilters, setAppliedFilters] = useState<AttendanceFilters>(initialFilters);
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [showScrollButton, setShowScrollButton] = useState(false);
 
   // Fetch data on mount
@@ -149,16 +152,16 @@ const EventAttendanceReport: React.FC = () => {
       
       // Search filter
       const hay = `${record.user_fname || u?.user_fname || ''} ${record.user_lname || u?.user_lname || ''} ${record.event_title || e?.title || ''}`.toLowerCase();
-      if (filters.search && !hay.includes(filters.search.toLowerCase())) return false;
-      if (search && !hay.includes(search.toLowerCase())) return false;
+      if (appliedFilters.search && !hay.includes(appliedFilters.search.toLowerCase())) return false;
+      if (appliedSearch && !hay.includes(appliedSearch.toLowerCase())) return false;
       
       // Status filter
-      if (Object.values(filters.statuses).some(Boolean) && !filters.statuses[record.attendance_status]) return false;
+      if (Object.values(appliedFilters.statuses).some(Boolean) && !appliedFilters.statuses[record.attendance_status]) return false;
       
       // Event type filter
-      if (Object.values(filters.eventTypes).some(Boolean)) {
+      if (Object.values(appliedFilters.eventTypes).some(Boolean)) {
         const eventType = record.requirement_type || e?.requirement_type;
-        if (!eventType || !filters.eventTypes[eventType as keyof typeof filters.eventTypes]) return false;
+        if (!eventType || !appliedFilters.eventTypes[eventType as keyof typeof appliedFilters.eventTypes]) return false;
       }
       
       // Course/Year/Section filters
@@ -166,19 +169,19 @@ const EventAttendanceReport: React.FC = () => {
       const userYear = record.year || u?.year;
       const userSection = record.section || u?.section;
       
-      if (filters.course && userCourse !== filters.course) return false;
-      if (filters.year && String(userYear) !== filters.year) return false;
-      if (filters.section && userSection !== filters.section) return false;
+      if (appliedFilters.course && userCourse !== appliedFilters.course) return false;
+      if (appliedFilters.year && String(userYear) !== appliedFilters.year) return false;
+      if (appliedFilters.section && userSection !== appliedFilters.section) return false;
       
       // Date range filter
       const recordDate = record.event_date || record.scan_datetime;
       const safeDate = recordDate ? new Date(recordDate.replace(' ', 'T')) : null;
-      if (dateRange.start && safeDate && !isNaN(safeDate.getTime()) && safeDate < new Date(dateRange.start)) return false;
-      if (dateRange.end && safeDate && !isNaN(safeDate.getTime()) && safeDate > new Date(dateRange.end)) return false;
+      if (appliedDateRange.start && safeDate && !isNaN(safeDate.getTime()) && safeDate < new Date(`${appliedDateRange.start}T00:00:00`)) return false;
+      if (appliedDateRange.end && safeDate && !isNaN(safeDate.getTime()) && safeDate > new Date(`${appliedDateRange.end}T23:59:59.999`)) return false;
       
       return true;
     });
-  }, [attendanceRecords, filters, userMap, eventMap, search, dateRange]);
+  }, [attendanceRecords, appliedFilters, userMap, eventMap, appliedSearch, appliedDateRange]);
 
   // Pagination
   const rowsPerPage = 10;
@@ -217,8 +220,15 @@ const EventAttendanceReport: React.FC = () => {
       toast.error("Please select a start and end date range.");
       return;
     }
+    setAppliedDateRange({ ...dateRange });
+    setAppliedFilters({ ...filters, statuses: { ...filters.statuses }, eventTypes: { ...filters.eventTypes } });
+    setAppliedSearch(search);
+    setCurrentPage(1);
     setReportGenerated(true);
   };
+
+  useEffect(() => { setReportGenerated(false); }, [dateRange, filters, search]);
+  useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages); }, [currentPage, totalPages]);
 
   const handlePageChange = (page: number) => {
     if (page < 1 || page > totalPages) return;
@@ -264,7 +274,7 @@ const EventAttendanceReport: React.FC = () => {
       excused: number;
     }> = {};
     
-    attendanceRecords.forEach(record => {
+    sortedRecords.forEach(record => {
       const dateStr = record.event_date || record.scan_datetime;
       let label = '';
       if (dateStr) {
@@ -283,7 +293,7 @@ const EventAttendanceReport: React.FC = () => {
     });
     
     return Object.values(map).sort((a, b) => new Date(a.label).getTime() - new Date(b.label).getTime());
-  }, [attendanceRecords]);
+  }, [sortedRecords]);
 
   // Scroll-to-top button logic
   useEffect(() => {
@@ -354,14 +364,14 @@ const EventAttendanceReport: React.FC = () => {
   return (
     <div className="flex min-h-screen min-w-0 w-full bg-gray-50 dark:bg-gray-900 py-14">
       <Sidebar />
-      <div className="flex min-w-0 flex-1 sm:ml-64 relative flex-col">
+      <div className="relative flex min-w-0 w-full flex-col overflow-x-hidden sm:ml-64 sm:w-[calc(100%-16rem)]">
         <div className="p-3 sm:px-5 sm:pt-5 sm:pb-1">
           <Breadcrumb items={trail} />
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between dark:border-gray-700 pt-0 mb-0 gap-4 sm:gap-0">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between dark:border-gray-700 pt-0 mb-0 gap-4 xl:flex-nowrap">
             <div className="flex-1 max-w-md">
               <Searchbar search={search} onSearchChange={setSearch} />
             </div>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 ml-0 sm:ml-4 relative">
+            <div className="relative flex w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:ml-4 xl:w-auto xl:flex-nowrap">
               <ToastContainer />
               
               {/* Attendance Filters */}
@@ -398,7 +408,8 @@ const EventAttendanceReport: React.FC = () => {
               {/* Export PDF Button */}
               <button
                 onClick={handleExportPDF}
-                className="py-2 sm:py-3 bg-red-500 hover:bg-red-400  focus:ring-red-300 px-3 flex items-center text-xs sm:text-sm font-medium text-white rounded-lg shadow-md transition-transform duration-200 ease-in-out transform hover:scale-105"
+                disabled={!reportGenerated}
+                className="py-2 sm:py-3 bg-red-500 hover:bg-red-400 focus:ring-red-300 px-3 flex items-center text-xs sm:text-sm font-medium text-white rounded-lg shadow-md transition-transform duration-200 ease-in-out transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -414,6 +425,7 @@ const EventAttendanceReport: React.FC = () => {
         <div className="min-w-0 flex-1 overflow-auto p-3 sm:px-5 sm:pt-0 sm:pb-5">
           {reportGenerated ? (
             <>
+              <p className="mb-3 rounded border border-primary-200 bg-primary-50 p-3 text-sm text-primary-900">Applied period: {appliedDateRange.start} through {appliedDateRange.end}. Change criteria and generate again to refresh this report.</p>
               {/* Table Section */}
               <div ref={tableRef} className="responsive-table-frame shadow-md relative z-10 mb-4">
                 <table className="responsive-table-cards min-w-0 sm:min-w-full bg-white dark:bg-gray-800 rounded-t-lg overflow-hidden shadow dark:text-white text-xs sm:text-sm">

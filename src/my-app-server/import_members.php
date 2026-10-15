@@ -38,7 +38,12 @@ $pdo->beginTransaction();
 try {
     $existing=$pdo->prepare('SELECT batch_id FROM member_import_batches WHERE club_id=? AND content_hash=?');
     $existing->execute([$actor['club_id'],$hash]);
-    if ($id=$existing->fetchColumn()) { $pdo->rollBack(); echo json_encode(['success'=>true,'batch_id'=>(int)$id,'idempotent'=>true]); exit; }
+    if ($id=$existing->fetchColumn()) {
+        $pdo->rollBack();
+        $saved=$pdo->prepare("SELECT r.line_number AS line,r.school_id,r.email,r.status,CONCAT('/register?invite=',i.token) AS activation_link,r.error_message AS error FROM member_import_rows r LEFT JOIN invite_links i ON i.id=r.invite_id WHERE r.batch_id=? ORDER BY r.line_number");
+        $saved->execute([$id]);
+        echo json_encode(['success'=>true,'batch_id'=>(int)$id,'idempotent'=>true,'rows'=>$saved->fetchAll(PDO::FETCH_ASSOC)]); exit;
+    }
     $stmt=$pdo->prepare('INSERT INTO member_import_batches(club_id,created_by,filename,content_hash,total_rows,valid_rows,invalid_rows) VALUES(?,?,?,?,?,?,?)');
     $stmt->execute([$actor['club_id'],$actor['user_id'],basename($_FILES['file']['name']),$hash,count($rows),$valid,count($rows)-$valid]);
     $batchId=(int)$pdo->lastInsertId(); $result=[];

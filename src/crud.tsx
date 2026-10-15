@@ -589,10 +589,10 @@ const Crud: React.FC = () => {
       <Sidebar
       />
 
-<div className="flex min-w-0 flex-1 sm:ml-64 relative flex-col">
+<div className="relative flex min-w-0 w-full flex-col overflow-x-hidden sm:ml-64 sm:w-[calc(100%-16rem)]">
   <div className="p-3 sm:px-5 sm:pt-5 sm:pb-1">
     <Breadcrumb items={trail} />
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between dark:border-gray-700 pt-0 mb-0 gap-4 sm:gap-0">
+    <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between dark:border-gray-700 pt-0 mb-0 gap-4 lg:flex-nowrap">
       {/* Left: Searchbar */}
       <div className="flex-1 max-w-md">
         <Searchbar
@@ -602,7 +602,7 @@ const Crud: React.FC = () => {
       </div>
 
       {/* Right: Add button + FilterDropdown */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 ml-0 sm:ml-4 relative">
+      <div className="relative flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:ml-4 lg:flex-nowrap">
         <ToastContainer />
         {currentUserRole !== 'Member' && (
           <Button

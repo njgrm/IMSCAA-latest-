@@ -34,15 +34,41 @@ $requestMethod = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 if (in_array($requestMethod, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
     $remote = (string)($_SERVER['REMOTE_ADDR'] ?? '');
     $trustedProxy = in_array($remote, ['127.0.0.1', '::1'], true);
-    $origin = trim((string)(($trustedProxy ? ($_SERVER['HTTP_X_IMSCCA_ORIGINAL_ORIGIN'] ?? null) : null) ?? ($_SERVER['HTTP_ORIGIN'] ?? '')));
+    // The browser's own Origin is the claim under test; it is matched against
+    // the addresses this app is actually served from. Only local hops are
+    // trusted to describe those addresses, never the caller.
+    $origin = strtolower(trim((string)($_SERVER['HTTP_ORIGIN'] ?? '')));
     if ($origin !== '') {
         $host = strtolower((string)parse_url($origin, PHP_URL_HOST));
         $forwarded = $trustedProxy
             ? (string)($_SERVER['HTTP_X_FORWARDED_HOST'] ?? ($_SERVER['HTTP_X_IMSCCA_ORIGIN_HOST'] ?? ''))
             : '';
         $server = strtolower((string)preg_replace('/:\d+$/', '', $forwarded ?: ($_SERVER['HTTP_HOST'] ?? '')));
+
+        // Through a dev tunnel the app is addressed twice: the relay reports the
+        // public tunnel host as the forward target, while the browser's
+        // same-origin Origin header and the dev server's own connection both
+        // read as the local dev-server origin. Both are this app, so both are
+        // accepted; a foreign page's Origin matches neither.
+        $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+        $scheme = $https ? 'https' : 'http';
+        $allowedOrigins = [];
+        if ($trustedProxy) {
+            $forwardedHost = strtolower(trim($forwarded));
+            if ($forwardedHost !== '') {
+                $forwardedProto = strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ($_SERVER['HTTP_X_IMSCCA_ORIGIN_PROTO'] ?? '')));
+                $allowedOrigins[] = ($forwardedProto === 'http' ? 'http' : 'https') . '://' . $forwardedHost;
+                $allowedOrigins[] = $scheme . '://' . $forwardedHost;
+            }
+            $proxyOrigin = strtolower(trim((string)($_SERVER['HTTP_X_IMSCCA_ORIGINAL_ORIGIN'] ?? '')));
+            if ($proxyOrigin !== '') $allowedOrigins[] = $proxyOrigin;
+        }
+        $httpHost = strtolower(trim((string)($_SERVER['HTTP_HOST'] ?? '')));
+        if ($httpHost !== '') $allowedOrigins[] = $scheme . '://' . $httpHost;
+
         $localHosts = ['localhost', '127.0.0.1', '::1'];
-        $allowed = $host !== '' && ($host === $server
+        $allowed = $host !== '' && (in_array($origin, array_unique($allowedOrigins), true)
+            || $host === $server
             || (in_array($host, $localHosts, true) && in_array($server, $localHosts, true)));
         if (!$allowed) api_error(403, 'Request origin is not allowed.', 'ORIGIN_FORBIDDEN');
     }

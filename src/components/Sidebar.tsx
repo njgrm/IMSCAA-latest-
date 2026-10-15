@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import headerlogo from '../assets/headerlogo.png';
 import headerlogoDark from '../assets/headerlogoDark.png';
@@ -109,6 +109,8 @@ const navItems: NavItem[] = [
 const Sidebar: React.FC = () => {
   const { theme } = useContext(ThemeContext);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 639px)').matches);
   const [openReports, setOpenReports] = useState(false);
   const [openAttendance, setOpenAttendance] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
@@ -128,6 +130,13 @@ const Sidebar: React.FC = () => {
   }, [userRole]);
 
   // Find active item and manage submenu states
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 639px)');
+    const update = () => setIsMobile(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
   useEffect(() => {
     let activeKey: string | undefined;
     let shouldOpenReports = false;
@@ -159,6 +168,7 @@ const Sidebar: React.FC = () => {
 
   useEffect(() => {
     if (!sidebarOpen) return;
+    const toggleButton = toggleRef.current;
 
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setSidebarOpen(false);
@@ -171,6 +181,7 @@ const Sidebar: React.FC = () => {
     return () => {
       document.removeEventListener('keydown', closeOnEscape);
       document.body.style.overflow = previousOverflow;
+      toggleButton?.focus();
     };
   }, [sidebarOpen]);
 
@@ -183,6 +194,7 @@ const Sidebar: React.FC = () => {
             <div className="flex items-center justify-start rtl:justify-end">
               {/* Mobile hamburger button */}
               <button
+                  ref={toggleRef}
                   type="button"
                    className="inline-flex items-center p-2 text-sm text-gray-500 sm:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700"
                    onClick={() => setSidebarOpen(o => !o)}
@@ -230,7 +242,7 @@ const Sidebar: React.FC = () => {
         />
       )}
 
-      <aside className={`fixed top-0 left-0 z-40 h-screen w-64 pt-20 bg-white dark:bg-gray-800 border-r dark:border-gray-700 transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} sm:translate-x-0`}>
+      <aside aria-hidden={isMobile && !sidebarOpen ? true : undefined} {...(isMobile && !sidebarOpen ? { inert: true } : {})} className={`fixed top-0 left-0 z-40 h-screen w-64 pt-20 bg-white dark:bg-gray-800 border-r dark:border-gray-700 transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} sm:translate-x-0`}>
       <ul className="relative h-full space-y-1 overflow-y-auto px-2 pb-4 font-medium">
         {isLoading ? (
           // Loading skeleton while fetching user role

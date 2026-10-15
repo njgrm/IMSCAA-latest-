@@ -1,13 +1,18 @@
-import React, { useState, useEffect, useRef, useContext } from "react";
+import React, { useState, useEffect, useRef, useContext, useCallback } from "react";
+import "@fontsource-variable/inter-tight";
+import "@fontsource-variable/source-sans-3";
 import { ThemeContext } from './theme/ThemeContext';
 import { Link } from "react-router-dom";
 import { Button } from "flowbite-react";
 import headerlogo from "./assets/headerlogo.png";
 import headerlogoDark from "./assets/headerlogoDark.png";
-import aboutPic from "./assets/aboutPic.png";
-import aboutPic2 from "./assets/aboutPic2.png";
-import aboutPic3 from "./assets/aboutPic3.png";
-import { motion, useAnimation, useMotionValue  } from "motion/react"
+import analyticsLight from "./assets/hero-analytics-light.png";
+import analyticsDark from "./assets/hero-analytics-dark.png";
+import paymentsLight from "./assets/hero-payments-light.png";
+import paymentsDark from "./assets/hero-payments-dark.png";
+import eventsLight from "./assets/hero-events-light.png";
+import eventsDark from "./assets/hero-events-dark.png";
+import { motion, useReducedMotion } from "motion/react"
 import aboutPic4 from "./assets/aboutPic4.svg";
 import aboutPic4Dark from "./assets/aboutPic4Dark.svg";
 import manage from "./assets/manage.svg";
@@ -21,12 +26,22 @@ import streamline from "./assets/streamline.svg";
     const [isScrolled, setIsScrolled] = useState(false);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const carouselRef = useRef<HTMLDivElement>(null);
-    const [width, setWidth] = useState(0);
-    const x = useMotionValue(0);
-    const controls = useAnimation();
-    const speedFactor = 55;
-
-
+    const carouselSequenceRef = useRef<HTMLDivElement>(null);
+    const carouselOffsetRef = useRef(0);
+    const carouselWidthRef = useRef(0);
+    const animationFrameRef = useRef<number | null>(null);
+    const resumeTimerRef = useRef<number | null>(null);
+    const dragRef = useRef({ active: false, startX: 0, startOffset: 0, moved: false, samples: [] as Array<{ x: number; time: number }> });
+    const inertiaVelocityRef = useRef(0);
+    const suppressClickRef = useRef(false);
+    const [userPaused, setUserPaused] = useState(false);
+    const [hoverPaused, setHoverPaused] = useState(false);
+    const [focusPaused, setFocusPaused] = useState(false);
+    const [dragPaused, setDragPaused] = useState(false);
+    const [resumePaused, setResumePaused] = useState(false);
+    const [pageHidden, setPageHidden] = useState(false);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const reduceMotion = useReducedMotion();
     interface Card {
       title: string;
       imgSrc: string;
@@ -55,40 +70,6 @@ import streamline from "./assets/streamline.svg";
         }
       };
     }, []);
-
-    useEffect(() => {
-      if (carouselRef.current) {
-        // Calculate the total draggable width
-        setWidth(carouselRef.current.scrollWidth - carouselRef.current.offsetWidth);
-      }
-    }, []);
-
-    const startAutoScroll = async () => {
-      const currentX = x.get();
-      // If near the end, reset to 0 (for an infinite loop effect)
-      if (currentX <= -width + 1) {
-        controls.set({ x: 0 });
-        await controls.start({
-          x: -width,
-          transition: { ease: "linear", duration: width / speedFactor, repeat: Infinity },
-        });
-      } else {
-        // Calculate remaining distance and duration based on current x
-        const remainingDistance = -width - currentX;
-        const newDuration = Math.abs(remainingDistance) / speedFactor;
-        await controls.start({
-          x: -width,
-          transition: { ease: "linear", duration: newDuration, repeat: Infinity },
-        });
-      }
-    };
-
-    // Start auto scroll once width is set
-    useEffect(() => {
-      if (width) {
-        startAutoScroll();
-      }
-    }, [width]);
 
     const cards: Card[] = [
     {
@@ -124,12 +105,93 @@ import streamline from "./assets/streamline.svg";
 
   ];
 
-  const carouselItems: Card[] = [...cards, ...cards, ...cards,...cards,...cards];
+  const applyCarouselOffset = useCallback(() => {
+    if (!carouselRef.current || reduceMotion) return;
+    const width = carouselWidthRef.current;
+    if (width > 0) carouselOffsetRef.current = ((carouselOffsetRef.current % width) + width) % width;
+    carouselRef.current.style.transform = `translate3d(${-carouselOffsetRef.current}px, 0, 0)`;
+  }, [reduceMotion]);
+
+  useEffect(() => {
+    const sequence = carouselSequenceRef.current;
+    if (!sequence) return;
+    const measure = () => {
+      carouselWidthRef.current = sequence.getBoundingClientRect().width;
+      applyCarouselOffset();
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(sequence);
+    measure();
+    return () => observer.disconnect();
+  }, [applyCarouselOffset]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => setPageHidden(document.hidden);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion || userPaused || pageHidden) return;
+    let previousTime: number | null = null;
+    const animate = (time: number) => {
+      if (previousTime !== null && !dragRef.current.active) {
+        const elapsedMs = Math.min(time - previousTime, 50);
+        const elapsedSeconds = elapsedMs / 1000;
+        if (Math.abs(inertiaVelocityRef.current) > 8) {
+          carouselOffsetRef.current += inertiaVelocityRef.current * elapsedSeconds;
+          inertiaVelocityRef.current *= Math.exp(-4.5 * elapsedSeconds);
+        } else {
+          inertiaVelocityRef.current = 0;
+          if (!hoverPaused && !focusPaused && !dragPaused && !resumePaused) {
+            carouselOffsetRef.current += elapsedMs * 0.018;
+          }
+        }
+      }
+      previousTime = time;
+      applyCarouselOffset();
+      animationFrameRef.current = window.requestAnimationFrame(animate);
+    };
+    animationFrameRef.current = window.requestAnimationFrame(animate);
+    return () => {
+      if (animationFrameRef.current !== null) window.cancelAnimationFrame(animationFrameRef.current);
+    };
+  }, [applyCarouselOffset, dragPaused, focusPaused, hoverPaused, pageHidden, reduceMotion, resumePaused, userPaused]);
+
+  useEffect(() => () => {
+    if (resumeTimerRef.current !== null) window.clearTimeout(resumeTimerRef.current);
+  }, []);
+
+  const pauseForInteraction = () => {
+    if (resumeTimerRef.current !== null) window.clearTimeout(resumeTimerRef.current);
+    setResumePaused(true);
+  };
+
+  const resumeAfterInteraction = () => {
+    if (resumeTimerRef.current !== null) window.clearTimeout(resumeTimerRef.current);
+    setResumePaused(true);
+    resumeTimerRef.current = window.setTimeout(() => setResumePaused(false), 2000);
+  };
+
+  const nudgeCarousel = (distance: number) => {
+    inertiaVelocityRef.current = 0;
+    carouselOffsetRef.current += distance;
+    applyCarouselOffset();
+    pauseForInteraction();
+    resumeAfterInteraction();
+  };
+
+  const themedScreenshot = (light: string, dark: string, alt: string) => (
+    <span className="landing-theme-shot">
+      <img draggable={false} className="landing-shot-light h-auto w-full rounded-lg" src={light} alt={`${alt} in light mode`} />
+      <img draggable={false} className="landing-shot-dark h-auto w-full rounded-lg" src={dark} alt={`${alt} in dark mode`} />
+    </span>
+  );
 
                     return (
                       <div
                         ref={scrollContainerRef}
-                        className="z-100 font-sans bg-white dark:bg-gray-900 min-h-screen relative overflow-y-scroll h-screen scroll-smooth"
+                        className="landing-page z-100 font-sans bg-white dark:bg-gray-900 min-h-screen relative overflow-x-hidden overflow-y-scroll h-screen scroll-smooth"
                       >
                         {/* Sticky Navbar */}
                         <nav
@@ -152,11 +214,12 @@ import streamline from "./assets/streamline.svg";
                             </span>
                           </span>
                         </Link>
-                        <div className="flex md:order-2 space-x-3">
+                        <div className="flex md:order-2 items-center space-x-2 sm:space-x-3">
                           {/* Dark Mode Toggle Button */}
                           <button
                             onClick={toggleDarkMode}
-                            className="fixed top-4 right-4 p-2 bg-gray-200 dark:bg-gray-700 rounded-lg z-50"
+                            className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg z-50"
+                            aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
                           >
                             {isDark ? "🌙" : "☀️"}
                           </button>
@@ -165,27 +228,28 @@ import streamline from "./assets/streamline.svg";
                           <Button
                             as={Link}
                             to="/login"
-                            className="text-white bg-primary-600 hover:bg-primary-400 transform transition-all duration-300 ease-in-out hover:scale-105 focus:ring-4 focus:outline-none focus:ring-primary-300 font-bold rounded-xl text-3xl px-4 py-2 dark:bg-primary-600 dark:hover:bg-primary-400 dark:focus:ring-primary-800"
+                            className="hidden text-white bg-primary-600 hover:bg-primary-400 transform transition-all duration-300 ease-in-out hover:scale-105 focus:ring-4 focus:outline-none focus:ring-primary-300 font-bold rounded-xl text-3xl px-4 py-2 dark:bg-primary-600 dark:hover:bg-primary-400 dark:focus:ring-primary-800 md:inline-flex"
                           >
                             Log In
                           </Button>
+                          <button type="button" className="landing-menu-button md:hidden" aria-label="Toggle navigation" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(value => !value)}>☰</button>
 
                           {/* Register Button (Outline) */}
                           <Button
                             as={Link}
                             to="/register"
-                            className="font-bold rounded-xl text-3xl px-4 py-2 border border-primary-600 text-primary-600 bg-transparent transform transition-all duration-300 ease-in-out hover:scale-105 hover:bg-primary-50 focus:ring-4 focus:outline-none focus:ring-primary-300 dark:bg-transparent dark:hover:bg-transparent dark:focus:ring-primary-800"
+                            className="hidden font-bold rounded-xl text-3xl px-4 py-2 border border-primary-600 text-primary-600 bg-transparent transform transition-all duration-300 ease-in-out hover:scale-105 hover:bg-primary-50 focus:ring-4 focus:outline-none focus:ring-primary-300 dark:bg-transparent dark:hover:bg-transparent dark:focus:ring-primary-800 md:inline-flex"
                           >
                             Sign Up
                           </Button>
                         </div>
                         <div
-                          className="items-center justify-between hidden w-full md:flex md:w-auto md:order-1"
+                          className={`${mobileMenuOpen ? "flex" : "hidden"} items-center justify-between w-full md:flex md:w-auto md:order-1`}
                           id="navbar-sticky"
                         >
                           <ul className="flex flex-col p-4 md:p-0 mt-4 font-semibold border border-gray-100 rounded-lg bg-gray-transparent md:space-x-8 md:flex-row md:mt-0 md:border-0 md:bg-white dark:bg-transparent md:dark:bg-gray-900 dark:border-gray-700">
                             <li>
-                            <a href="#home" className="block py-2 px-3 text-[#12262f] e bg-transparent rounded-sm md:bg-transparent md:hover:text-primary-600  md:p-0 dark:text-white">
+                            <a href="#home" className="block rounded-sm bg-transparent px-3 py-2 text-[#12262f] md:bg-transparent md:p-0 md:hover:text-primary-600 dark:text-white">
                                 Home
                                 </a>
                             </li>
@@ -202,6 +266,8 @@ import streamline from "./assets/streamline.svg";
                                 Features
                               </a>
                             </li>
+                            <li className="md:hidden"><Link to="/login" className="block rounded-sm px-3 py-2 font-semibold text-primary-700 dark:text-primary-400">Log In</Link></li>
+                            <li className="md:hidden"><Link to="/register" className="block rounded-sm px-3 py-2 font-semibold text-primary-700 dark:text-primary-400">Sign Up</Link></li>
                           </ul>
                         </div>
                       </div>
@@ -211,30 +277,31 @@ import streamline from "./assets/streamline.svg";
 
 <motion.section
   id="home"
-  initial={{ opacity: 0, y: 50 }}
-  whileInView={{ opacity: 1, y: 0 }}
+  initial={reduceMotion ? false : { opacity: 0 }}
+  whileInView={{ opacity: 1 }}
+  viewport={{ once: true }}
   transition={{ duration: 0.8, ease: "easeOut" }}
-  className="relative scroll-mt-[15%] bg-[#fefefe] dark:bg-gray-900 mt-[var(--navbar-height)] snap-center min-h-screen scroll-section"
+  className="landing-hero relative bg-[#fefefe] dark:bg-gray-900 snap-center min-h-screen scroll-section"
 >
-  <div className="py-12 px-6 mx-auto max-w-screen-xl text-center lg:py-16 lg:px-12">
+  <div className="landing-hero-intro mx-auto max-w-screen-xl px-6 text-center lg:px-12">
     {/* Main Heading */}
     <motion.h1
-      initial={{ opacity: 0, y: -50 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={reduceMotion ? false : { opacity: 0, scale: 0.98 }}
+      whileInView={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.6, ease: "easeOut", delay: 0.2 }}
-      viewport={{ once: false }}
-      className="text-[#12262f] dark:text-white text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight leading-tight mb-4"
+      viewport={{ once: true }}
+      className="landing-display text-[#12262f] dark:text-white font-extrabold leading-tight mb-3"
     >
       Revolutionize Your Campus Clubs.
     </motion.h1>
 
     {/* Subheading */}
     <motion.h2
-      initial={{ opacity: 0, y: -30 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={reduceMotion ? false : { opacity: 0 }}
+      whileInView={{ opacity: 1 }}
       transition={{ duration: 0.6, ease: "easeOut", delay: 0.4 }}
-      viewport={{ once: false }}
-      className="text-gray-700 dark:text-gray-300 text-2xl sm:text-3xl md:text-4xl font-semibold mb-6"
+      viewport={{ once: true }}
+      className="landing-subtitle text-gray-700 dark:text-gray-300 font-semibold"
     >
       One Platform. Endless Possibilities.{" "}
       <span className="self-center font-bold whitespace-nowrap text-[#12262f] dark:text-primary-400">
@@ -249,23 +316,12 @@ import streamline from "./assets/streamline.svg";
   </div>
 
   {/* Overlapping Images */}
-  <div className="relative w-full max-w-screen-xl mx-auto -mb-32 z-40 mt-[-3%] pt-[5%]">
+  <div className="landing-hero-shots relative z-40 mx-auto w-full max-w-screen-xl">
 
     {/* Center Image */}
-<motion.figure
-  initial={{ opacity: 0, scale: 0.9 }}
-  whileInView={{ opacity: 1, scale: 1 }}
-  transition={{ duration: 0.8 }}
-  viewport={{ once: false }}
-  className="absolute left-[32%] transform -translate-x-1/2 top-4 w-80 sm:w-96 md:w-[30rem] lg:w-[34rem] xl:w-[30rem] z-30"
->
-  {/* Bobbing Text (Figcaption) */}
-  <motion.div
-    initial={{ y: 0 }}
-    whileInView={{ y: [0, -10, 0] }}
-    transition={{ duration: 2.9, ease: "easeInOut", repeat: Infinity, repeatDelay: 1.3  }}
-    viewport={{ once: false }}
-  >
+<figure className="landing-shot landing-shot-analytics absolute z-30">
+  <motion.div initial={reduceMotion ? false : { opacity: 0, scale: 0.98 }} whileInView={{ opacity: 1, scale: 1 }} transition={{ duration: 0.65 }} viewport={{ once: true }}>
+  <motion.div className="landing-shot-breathe" animate={reduceMotion ? undefined : { y: [0, -4, 0] }} transition={{ duration: 3.6, ease: "easeInOut", repeat: Infinity }}>
     <figcaption className="mb-2 text-xl font-bold leading-tight tracking-tight text-center">
       <span className="hidden dark:block bg-gradient-to-tr from-[#238354] via-[#2FAE68] to-[#3FBF7F] bg-clip-text text-transparent">
         Analytics
@@ -274,37 +330,15 @@ import streamline from "./assets/streamline.svg";
         Analytics
       </span>
     </figcaption>
+    {themedScreenshot(analyticsLight, analyticsDark, "IMSCCA analytics dashboard")}
   </motion.div>
-
-  {/* Bobbing Image */}
-  <motion.div
-    initial={{ y: 0 }}
-    whileInView={{ y: [0, -10, 0] }}
-    transition={{ duration: 2.9, ease: "easeInOut", repeat: Infinity, repeatDelay: 1.3 }}
-    viewport={{ once: false }}
-  >
-    <img
-      className="h-auto w-full rounded-lg shadow-[0px_10px_18px_rgba(0,0,0,0.25)]"
-      src={aboutPic}
-      alt="Image 1"
-    />
   </motion.div>
-</motion.figure>
+</figure>
 
     {/* Left Image */}
-    <motion.figure
-      initial={{ opacity: 0, x: -100 }}
-      whileInView={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.8, delay: 0.2 }}
-      viewport={{ once: false }}
-      className="absolute left-5 sm:left-14 md:left-20 top-24 w-64 sm:w-72 md:w-80 lg:w-96 xl:w-[30rem] z-10"
-    >
-        <motion.div
-    initial={{ y: 0 }}
-    whileInView={{ y: [0, -10, 0] }}
-    transition={{ duration: 3.9, ease: "easeInOut", repeat: Infinity, repeatDelay: 0.6 }}
-    viewport={{ once: false }}
-  >
+    <figure className="landing-shot landing-shot-payments absolute z-10">
+      <motion.div initial={reduceMotion ? false : { opacity: 0, scale: 0.98 }} whileInView={{ opacity: 1, scale: 1 }} transition={{ duration: 0.65, delay: 0.15 }} viewport={{ once: true }}>
+      <motion.div className="landing-shot-breathe" animate={reduceMotion ? undefined : { y: [0, -4, 0] }} transition={{ duration: 4, ease: "easeInOut", repeat: Infinity, delay: 0.2 }}>
       <figcaption className="mb-2 text-xl font-bold leading-tight tracking-tight text-center">
         <span className="hidden dark:block bg-gradient-to-r from-[#238354] via-[#2FAE68] to-[#3FBF7F] bg-clip-text text-transparent">
           Payments
@@ -313,35 +347,15 @@ import streamline from "./assets/streamline.svg";
           Payments
         </span>
       </figcaption>
+        {themedScreenshot(paymentsLight, paymentsDark, "IMSCCA payments page")}
       </motion.div>
-      <motion.div
-        initial={{ y: 0 }}
-        whileInView={{ y: [0, -15, 0] }}
-        transition={{ duration: 3.9, ease: "easeInOut", repeat: Infinity, repeatDelay: 0.6 }}
-        viewport={{ once: false }}
-      >
-        <img
-          className="h-auto w-full rounded-lg shadow-[0px_8px_18px_rgba(0,0,0,0.25)]"
-          src={aboutPic2}
-          alt="Image 2"
-        />
       </motion.div>
-    </motion.figure>
+    </figure>
 
     {/* Right Image */}
-    <motion.figure
-      initial={{ opacity: 0, x: 100 }}
-      whileInView={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.8, delay: 0.2 }}
-      viewport={{ once: false }}
-      className="absolute right-5 sm:right-14 md:right-20 top-28 w-64 sm:w-72 md:w-80 lg:w-96 xl:w-[30rem] z-20"
-    >
-             <motion.div
-    initial={{ y: 0 }}
-    whileInView={{ y: [0, -10, 0] }}
-    transition={{ duration: 2, ease: "easeInOut", repeat: Infinity, repeatDelay: 0.7 }}
-    viewport={{ once: false }}
-  >
+    <figure className="landing-shot landing-shot-events absolute z-20">
+      <motion.div initial={reduceMotion ? false : { opacity: 0, scale: 0.98 }} whileInView={{ opacity: 1, scale: 1 }} transition={{ duration: 0.65, delay: 0.15 }} viewport={{ once: true }}>
+      <motion.div className="landing-shot-breathe" animate={reduceMotion ? undefined : { y: [0, -4, 0] }} transition={{ duration: 3.8, ease: "easeInOut", repeat: Infinity, delay: 0.4 }}>
       <figcaption className="mb-2 text-xl font-bold leading-tight tracking-tight text-center">
         <span className="hidden dark:block bg-gradient-to-l from-[#238354] via-[#2FAE68] to-[#3FBF7F] bg-clip-text text-transparent">
           Events
@@ -350,197 +364,52 @@ import streamline from "./assets/streamline.svg";
           Events
         </span>
       </figcaption>
+        {themedScreenshot(eventsLight, eventsDark, "IMSCCA events page")}
       </motion.div>
-      <motion.div
-        initial={{ y: 0 }}
-        whileInView={{ y: [0, -12, 0] }}
-        transition={{ duration: 2, ease: "easeInOut", repeat: Infinity, repeatDelay: 0.7 }}
-        viewport={{ once: false }}
-      >
-        <img
-          className="h-auto w-full rounded-lg shadow-[0px_8px_18px_rgba(0,0,0,0.25)]"
-          src={aboutPic3}
-          alt="Image 3"
-        />
       </motion.div>
-    </motion.figure>
+    </figure>
   </div>
 
-  {/* Say Goodbye Section */}
-  <motion.div
-    initial={{ opacity: 0, y: 30 }}
-    whileInView={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.8, delay: 0.3 }}
-    viewport={{ once: false }}
-    className="py-12 px-6 mx-auto max-w-screen-xl text-center lg:py-16 lg:px-12"
-  >
-    <p className="text-gray-500 dark:text-gray-400 text-lg sm:text-xl md:text-2xl mb-8 pt-[33%]">
-      <br />
+  <div aria-hidden="true" className="landing-wave landing-wave-hero pointer-events-none absolute inset-x-0 bottom-0 z-20 overflow-hidden">
+    <svg className="h-full w-full" viewBox="0 0 1440 320" preserveAspectRatio="xMidYMax slice">
+      <path fill={isDark ? "#12262f" : "#238354"} d="M0 160L60 186.7C120 213 240 267 360 272C480 277 600 235 720 181.3C840 128 960 64 1080 64C1200 64 1320 128 1380 160L1440 192V320H0Z" />
+      <path transform="translate(0 34)" fill={isDark ? "#1a3a4a" : "#2e9b63"} d="M0 160L60 186.7C120 213 240 267 360 272C480 277 600 235 720 181.3C840 128 960 64 1080 64C1200 64 1320 128 1380 160L1440 192V320H0Z" />
+      <path transform="translate(0 68)" fill={isDark ? "#224c5f" : "#3fbf7f"} d="M0 160L60 186.7C120 213 240 267 360 272C480 277 600 235 720 181.3C840 128 960 64 1080 64C1200 64 1320 128 1380 160L1440 192V320H0Z" />
+    </svg>
+  </div>
 
-    </p>
+  <div className="landing-hero-cta absolute inset-x-0 z-50 flex justify-center">
+    <Link to="/register" className="landing-heading inline-flex items-center justify-center rounded-xl border border-white/30 bg-primary-600 px-8 py-3 font-semibold text-white shadow-[0_10px_30px_rgba(0,0,0,0.32)] transition-colors hover:bg-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-300 dark:focus:ring-primary-800">Get Started</Link>
+  </div>
 
-    <div className="relative z-50 flex justify-center">
-      <motion.div
-        initial={{ scale: 0.9 }}
-        whileHover={{ scale: 1.0 }}
-        transition={{ duration: 0.2 }}
-        className="flex flex-col sm:flex-row justify-center gap-4"
-      >
-        <Link
-          to="/register"
-          className="z-10 inline-flex justify-center items-center py-4 px-12 text-2xl font-semibold text-white bg-primary-600 rounded-xl hover:bg-primary-400 transition-transform focus:ring-4 focus:ring-primary-300 dark:focus:ring-primary-800"
-        >
-          Get Started
-        </Link>
-      </motion.div>
-    </div>
-  </motion.div>
 </motion.section>
-
-{/* SVG Wave Layers Container */}
-<div className="absolute top-[57%] left-0 w-full h-screen overflow-hidden z-20">
-  {/* Hero Layer */}
-  <div
-    className="absolute top-[-43%] left-0 w-full h-[90vh] bg-no-repeat bg-cover transition-all duration-200 ease-in-out z-10"
-    style={{
-      backgroundImage: `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 -10 1040 320"><path fill="${
-        isDark ? "%2312262f" : "%23238354"
-      }" fill-opacity="1" d="M0,160L60,186.7C120,213,240,267,360,272C480,277,600,235,720,181.3C840,128,960,64,1080,64C1200,64,1320,128,1380,160L1440,192L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,840,320,720,320C600,320,480,320,360,320C240,320,120,320,60,320L0,320Z"></path></svg>')`,
-    }}
-  ></div>
-
-  {/* Mid Layer */}
-  <div
-    className="absolute top-[-12%] left-0s w-full h-[60vh] bg-no-repeat bg-cover opacity-100 transition-all duration-200 ease-in-out z-20"
-    style={{
-      backgroundImage: `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -20 1040 320"><path fill="${
-        isDark ? "%231a3a4a" : "%232E9B63"
-      }" fill-opacity="1" d="M0,160L60,186.7C120,213,240,267,360,272C480,277,600,235,720,181.3C840,128,960,64,1080,64C1200,64,1320,128,1380,160L1440,192L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,840,320,720,320C600,320,480,320,360,320C240,320,120,320,60,320L0,320Z"></path></svg>')`,
-    }}
-  ></div>
-
-  {/* Solid Color Block Behind Mid Layer */}
-  <div
-    className="absolute top-[46%] left-0 w-full h-[20vh] transition-all duration-200 ease-in-out z-20"
-    style={{
-      backgroundColor: isDark ? "#1a3a4a" : "#2E9B63", // Matches Mid Layer color
-    }}
-  ></div>
-
-  {/* Top Layer */}
-  <div
-    className="absolute top-[-3%] left-0 w-full h-[70vh] bg-no-repeat bg-cover opacity-100 z-20"
-    style={{
-      backgroundImage: `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 -10 1040 320"><path fill="${
-        isDark ? "%23224c5f" : "%233FBF7F"
-      }" fill-opacity="1" d="M0,160L60,186.7C120,213,240,267,360,272C480,277,600,235,720,181.3C840,128,960,64,1080,64C1200,64,1320,128,1380,160L1440,192L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,840,320,720,320C600,320,480,320,360,320C240,320,120,320,60,320L0,320Z"></path></svg>')`,
-    }}
-  ></div>
-
-  {/* Bottom Layer (Continuation of Top Layer) */}
-
-</div>
 
 <motion.section
   id="about"
-  initial={{ opacity: 0, y: 50 }}
-  whileInView={{ opacity: 1, y: 0 }}
+  initial={reduceMotion ? false : { opacity: 0, scale: 0.99 }}
+  whileInView={{ opacity: 1, scale: 1 }}
   transition={{ duration: 0.8, ease: "easeOut" }}
-  viewport={{ once: false, amount: 0.2 }}
-  className="relative mt-[15%] left-[-2%] pt-[-10%] bg-[#fefefe] dark:bg-gray-900 py-20 px-6 z-20 snap-center min-h-screen"
+  viewport={{ once: true, amount: 0.2 }}
+  className="landing-about relative bg-[#fefefe] dark:bg-gray-900 z-20 snap-center"
 >
-  <div className="py-12 mt-[-9%] px-6 mx-auto max-w-screen-xl flex flex-col lg:flex-row items-center lg:items-start lg:justify-between lg:py-16 lg:px-12">
-    {/* Left Side - Title */}
-    <div className="text-left lg:w-1/2">
-      <h1 className="leading-tight text-[#12262f] dark:text-white text-4xl sm:text-5xl md:text-8xl font-extrabold mb-4 md:mb-4">
-        <motion.span
-          initial={{ opacity: 0, x: -50 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          viewport={{ once: false }}
-          className="text-[#3FBF7F] block mb-[-13%]"
-        >
-          Integrated
-        </motion.span>
-        <br />
-        <motion.span
-          initial={{ opacity: 0, x: 50 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          viewport={{ once: false }}
-          className="text-[#2E9B63] block mb-[-13%]"
-        >
-          Management
-        </motion.span>
-        <br />
-        <motion.span
-          initial={{ opacity: 0, x: -50 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          viewport={{ once: false }}
-          className="text-[#238354] block mb-[-13%]"
-        >
-          System for
-        </motion.span>
-        <br />
-        <motion.span
-          initial={{ opacity: 0, x: 50 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
-          viewport={{ once: false }}
-          className="text-[#f45d05] block mb-[-13%]"
-        >
-          Campus
-        </motion.span>
-        <br />
-        <motion.span
-          initial={{ opacity: 0, x: -50 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, delay: 0.5 }}
-          viewport={{ once: false }}
-          className="text-[#f45d05] block mb-[-13%]"
-        >
-          Club
-        </motion.span>
-        <br />
-        <motion.span
-          initial={{ opacity: 0, x: 50 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, delay: 0.5 }}
-          viewport={{ once: false }}
-          className="text-[#f45d05] block mb"
-        >
-          Affairs
-        </motion.span>
+  <div className="landing-about-grid mx-auto grid max-w-screen-xl items-center px-6 lg:px-12">
+    <div className="landing-about-title text-left">
+      <h1 className="landing-heading landing-about-name font-extrabold text-[#12262f] dark:text-white">
+        <motion.span initial={reduceMotion ? false : { opacity: 0 }} whileInView={{ opacity: 1 }} transition={{ delay: 0.08 }} viewport={{ once: true }} className="text-[#3FBF7F]">Integrated</motion.span>
+        <motion.span initial={reduceMotion ? false : { opacity: 0 }} whileInView={{ opacity: 1 }} transition={{ delay: 0.14 }} viewport={{ once: true }} className="text-[#2E9B63]">Management</motion.span>
+        <motion.span initial={reduceMotion ? false : { opacity: 0 }} whileInView={{ opacity: 1 }} transition={{ delay: 0.2 }} viewport={{ once: true }} className="text-[#238354]">System for</motion.span>
+        <motion.span initial={reduceMotion ? false : { opacity: 0 }} whileInView={{ opacity: 1 }} transition={{ delay: 0.26 }} viewport={{ once: true }} className="text-[#f45d05]">Campus</motion.span>
+        <motion.span initial={reduceMotion ? false : { opacity: 0 }} whileInView={{ opacity: 1 }} transition={{ delay: 0.32 }} viewport={{ once: true }} className="text-[#f45d05]">Club</motion.span>
+        <motion.span initial={reduceMotion ? false : { opacity: 0 }} whileInView={{ opacity: 1 }} transition={{ delay: 0.38 }} viewport={{ once: true }} className="text-[#f45d05]">Affairs</motion.span>
       </h1>
-
-      {/* Subheading */}
-      <h2 className="text-gray-700 dark:text-gray-300 text-2xl sm:text-3xl md:text-4xl font-semibold mb-6">
+      <h2 className="landing-heading landing-about-tagline font-semibold text-gray-700 dark:text-gray-300">
         One Platform. Endless Possibilities.
       </h2>
     </div>
-
-    {/* Right Side - About Section */}
-{/* Right Side - About Section */}
-<motion.div
-  initial={{ opacity: 0, x: 50 }}
-  whileInView={{ opacity: 1, x: 0 }}
-  transition={{ duration: 0.6, delay: 0.3 }}
-  viewport={{ once: false }}
-  className="absolute right-[4%] top-1/3 w-[40%] text-left z-10"
->
-<div className="flex justify-center relative mb-4 right-[33%]  min-w-[120%] ">
-    <img
-      src={isDark ?  aboutPic4Dark : aboutPic4}
-      alt="About IMSCCA"
-    className="absolute z-10 left-0 top-0 translate-y-[-70%] h-auto opacity-100"
-    />
-  </div>
-
-    <div className="z-20 relative flex flex-col items-left translate-y-[50%] translate-x-[-20%] mt-[5%] text-left w-full max-w-[80%] mx-auto">
-      {/* Heading */}
-      <h3 className="relative z-20 text-gray-700 dark:text-gray-300 text-2xl sm:text-3xl md:text-4xl font-bold mb-6">
-        About    {" "}
+    <motion.div initial={reduceMotion ? false : { opacity: 0, scale: 0.99 }} whileInView={{ opacity: 1, scale: 1 }} transition={{ duration: 0.55, delay: 0.2 }} viewport={{ once: true }} className="landing-about-copy text-left">
+      <img src={isDark ? aboutPic4Dark : aboutPic4} alt="About IMSCCA" className="landing-about-art" />
+      <h3 className="landing-heading landing-about-heading font-bold text-gray-700 dark:text-gray-300">
+        About{" "}
         <span className="bg-gradient-to-r from-[#2E9B63] to-[#3FBF7F] bg-clip-text text-transparent">
           IMS
         </span>
@@ -548,29 +417,25 @@ import streamline from "./assets/streamline.svg";
           CCA
         </span>
       </h3>
-
-      {/* Paragraph */}
-      <p className="relative z-20 text-gray-700 dark:text-gray-300 text-lg leading-relaxed">
+      <p className="landing-about-body text-gray-700 dark:text-gray-300">
         The <strong>Integrated Management System for Campus Club Affairs (IMSCCA)</strong> is a
         modern platform that simplifies campus club operations. It combines <strong>attendance tracking,
-	        membership, financial management, event coordination, attendance, and operational reporting</strong>
+	        membership, financial management, event coordination, and operational reporting</strong>
         into a single, efficient system. With <strong>QR-based tracking, real-time updates,
         and automated notifications</strong>, IMSCCA enhances efficiency, reduces paperwork,
         and improves student engagement across campuses.
       </p>
-
-</div>
-</motion.div>
-
+    </motion.div>
   </div>
 </motion.section>
 
 <motion.section
   id="features"
-  initial={{ opacity: 0, y: 50 }}
-  whileInView={{ opacity: 1, y: 0 }}
+  initial={reduceMotion ? false : { opacity: 0 }}
+  whileInView={{ opacity: 1 }}
+  viewport={{ once: true }}
   transition={{ duration: 0.8, ease: "easeOut" }}
-  className="relative top-[-5%] bg-[#fefefe] dark:bg-gray-900 py-20 px-6 text-center text-[#12262f] dark:text-white"
+  className="landing-features relative bg-[#fefefe] dark:bg-gray-900 py-20 px-6 text-center text-[#12262f] dark:text-white"
 >
   {/* Centered Heading & Description */}
   <div className="mx-auto max-w-screen-xl">
@@ -600,61 +465,103 @@ import streamline from "./assets/streamline.svg";
     </motion.p>
   </div>
 
-  {/* Full-Width Carousel Container – isolated from parent's animations */}
-  <div className="w-screen -mx-6 overflow-x-hidden overflow-y-visible relative z-50 py-6">
-    <motion.div
-      ref={carouselRef}
-      inherit={false} // Prevents inheriting parent's animation states
-      initial={false} // Renders immediately in its final state
-      style={{ x }}
-      drag="x"
-      dragConstraints={{ right: 0, left: -width }}
-      animate={controls}
-      onDragStart={() => controls.stop()}
-      onDragEnd={() => startAutoScroll()}
-      className="flex space-x-10 cursor-grab"
-      whileTap={{ cursor: "grabbing" }}
+  <div className="landing-carousel-shell relative z-50 py-6" onMouseEnter={() => setHoverPaused(true)} onMouseLeave={() => setHoverPaused(false)} onFocusCapture={() => setFocusPaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusPaused(false); }}>
+    {!reduceMotion && (
+      <button
+        type="button"
+        className="landing-carousel-toggle"
+        aria-label={userPaused ? "Play feature carousel" : "Pause feature carousel"}
+        title={userPaused ? "Play carousel" : "Pause carousel"}
+        onClick={() => setUserPaused((value) => !value)}
+      >
+        <span aria-hidden="true" className={userPaused ? "landing-play-icon" : "landing-pause-icon"} />
+      </button>
+    )}
+    <div
+      className="landing-carousel-viewport"
+      role="region"
+      aria-label="IMSCCA features"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowLeft") { event.preventDefault(); nudgeCarousel(-320); }
+        if (event.key === "ArrowRight") { event.preventDefault(); nudgeCarousel(320); }
+        if (event.key === " ") { event.preventDefault(); setUserPaused(value => !value); }
+      }}
+      onPointerDown={(event) => {
+        if (resumeTimerRef.current !== null) window.clearTimeout(resumeTimerRef.current);
+        setResumePaused(false);
+        setDragPaused(true);
+        inertiaVelocityRef.current = 0;
+        suppressClickRef.current = false;
+        dragRef.current = {
+          active: true,
+          startX: event.clientX,
+          startOffset: carouselOffsetRef.current,
+          moved: false,
+          samples: [{ x: event.clientX, time: performance.now() }],
+        };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        if (!dragRef.current.active) return;
+        carouselOffsetRef.current = dragRef.current.startOffset + dragRef.current.startX - event.clientX;
+        const now = performance.now();
+        dragRef.current.moved ||= Math.abs(event.clientX - dragRef.current.startX) > 6;
+        dragRef.current.samples.push({ x: event.clientX, time: now });
+        dragRef.current.samples = dragRef.current.samples.filter((sample) => now - sample.time <= 120).slice(-8);
+        applyCarouselOffset();
+      }}
+      onPointerUp={(event) => {
+        const samples = dragRef.current.samples;
+        const first = samples[0];
+        const last = samples[samples.length - 1];
+        if (dragRef.current.moved && first && last && last.time > first.time) {
+          const velocity = (first.x - last.x) / ((last.time - first.time) / 1000);
+          inertiaVelocityRef.current = Math.max(-1400, Math.min(1400, velocity));
+          suppressClickRef.current = true;
+        }
+        dragRef.current.active = false;
+        setDragPaused(false);
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }}
+      onPointerCancel={() => {
+        dragRef.current.active = false;
+        inertiaVelocityRef.current = 0;
+        setDragPaused(false);
+        resumeAfterInteraction();
+      }}
+      onClickCapture={(event) => {
+        if (!suppressClickRef.current) return;
+        event.preventDefault();
+        event.stopPropagation();
+        suppressClickRef.current = false;
+      }}
     >
-      {carouselItems.map((card, index) => (
-        <motion.div
-          key={index}
-          inherit={false}
-          initial={false}
-          whileHover={{ scale: 1.05 }}
-          transition={{ duration: 0.3 }}
-          className="min-w-[350px] bg-white border border-gray-200 rounded-lg shadow-[0px_4px_12px_rgba(0,0,0,0.25)] dark:bg-gray-800 dark:border-gray-700"
-        >
-          <div className="p-14 pb-16">
-            <h3 className="mb-0 mt-[-3%] z-50 text-5xl font-bold leading-[150%] tracking-tight text-gray-900 dark:text-white">
-              <span className="hidden dark:block bg-gradient-to-l from-[#238354] via-[#2FAE68] to-[#3FBF7F] bg-clip-text text-transparent">
-                {card.title}
-              </span>
-              <span className="dark:hidden bg-gradient-to-r from-[#238354] via-[#2FAE68] to-[#3FBF7F] bg-clip-text text-transparent">
-                {card.title}
-              </span>
-            </h3>
+      <div ref={carouselRef} className="landing-carousel-track">
+        {[false, true].map((duplicate) => (
+          <div key={duplicate ? "duplicate" : "primary"} ref={duplicate ? undefined : carouselSequenceRef} className="landing-carousel-sequence" aria-hidden={duplicate || undefined}>
+            {cards.map((card) => (
+              <motion.article key={card.title} initial={false} whileHover={reduceMotion ? undefined : { scale: 1.025 }} transition={{ duration: 0.2 }} className="landing-carousel-card min-w-[350px] bg-white border border-gray-200 rounded-lg shadow-[0px_4px_12px_rgba(0,0,0,0.25)] dark:bg-gray-800 dark:border-gray-700">
+                <div className="p-14 pb-16">
+                  <h3 className="landing-heading mb-0 mt-[-3%] z-50 text-5xl font-bold leading-[150%] text-gray-900 dark:text-white">
+                    <span className="hidden dark:block bg-gradient-to-l from-[#238354] via-[#2FAE68] to-[#3FBF7F] bg-clip-text text-transparent">{card.title}</span>
+                    <span className="dark:hidden bg-gradient-to-r from-[#238354] via-[#2FAE68] to-[#3FBF7F] bg-clip-text text-transparent">{card.title}</span>
+                  </h3>
+                </div>
+                <motion.img draggable={false} inherit={false} initial={false} className="rounded-none" src={card.imgSrc} alt={duplicate ? "" : card.title} />
+                <div className="p-5"><p className="mb-3 font-normal text-gray-700 dark:text-gray-400">{card.text}</p></div>
+              </motion.article>
+            ))}
           </div>
-          <motion.img
-            inherit={false}
-            initial={false}
-            className="rounded-none"
-            src={card.imgSrc}
-            alt={card.title}
-          />
-          <div className="p-5">
-            <p className="mb-3 font-normal text-gray-700 dark:text-gray-400">
-              {card.text}
-            </p>
-          </div>
-        </motion.div>
-      ))}
-    </motion.div>
+        ))}
+      </div>
+    </div>
   </div>
 </motion.section>
 
 
 {/* SVG Wave Layers Container */}
-<div className="absolute top-[280%] left-0 w-full h-screen overflow-hidden z-0">
+<div aria-hidden="true" className="landing-wave landing-wave-footer absolute top-[280%] left-0 w-full h-screen overflow-hidden z-0 pointer-events-none">
   {/* Hero Layer */}
   <div
     className="absolute top-[-43%] left-0 w-full h-[90vh] bg-no-repeat bg-cover transition-all duration-200 ease-in-out z-10"
@@ -667,7 +574,7 @@ import streamline from "./assets/streamline.svg";
 
   {/* Mid Layer */}
   <div
-    className="absolute top-[-12%] left-0s w-full h-[60vh] bg-no-repeat bg-cover opacity-100 transition-all duration-200 ease-in-out z-20"
+    className="absolute top-[-12%] left-0 w-full h-[60vh] bg-no-repeat bg-cover opacity-100 transition-all duration-200 ease-in-out z-20"
     style={{
       backgroundImage: `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -20 1040 320"><path fill="${
         isDark ? "%231a3a4a" : "%232E9B63"

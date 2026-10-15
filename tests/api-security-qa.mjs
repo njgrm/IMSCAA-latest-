@@ -1,5 +1,6 @@
 import { request } from 'playwright';
 import { execFileSync, spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
 const mysql = 'D:\\XAMPP\\mysql\\bin\\mysql.exe';
 const mysqldump = 'D:\\XAMPP\\mysql\\bin\\mysqldump.exe';
@@ -95,6 +96,8 @@ try {
   mysqlExec(`DROP DATABASE IF EXISTS ${database}; CREATE DATABASE ${database} CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;`, '');
   const schema = execFileSync(mysqldump, ['-u', 'root', '--no-data', '--skip-comments', 'db_imscca']);
   execFileSync(mysql, ['-u', 'root', database], { input: schema });
+  execFileSync(mysql, ['-u', 'root', database], { input: readFileSync('db_imscca/migrations/2026-09-08_transaction_ledger.sql') });
+  execFileSync(mysql, ['-u', 'root', database], { input: readFileSync('db_imscca/migrations/2026-09-09_pending_request_integrity.sql') });
 
   server = spawn(php, ['-S', `127.0.0.1:${port}`, '-t', 'src/my-app-server'], {
     cwd: process.cwd(),
@@ -125,10 +128,36 @@ try {
   const ownA = await call(clubA.context, 'add_transaction.php', { method: 'POST', data: { user_ids: [memberA.userId], requirement_ids: [feeA], amount_paid: 0, payment_status: 'unpaid', payment_method: '', fee_description: 'Own A' } });
   const ownB = await call(clubB.context, 'add_transaction.php', { method: 'POST', data: { user_ids: [memberB.userId], requirement_ids: [feeB], amount_paid: 0, payment_status: 'unpaid', payment_method: '', fee_description: 'Own B' } });
   check('create own-club transactions', ownA.ok && ownB.ok, `${ownA.status}/${ownB.status}`);
+  const transactionA = Number(mysqlExec(`SELECT transaction_id FROM transactions WHERE requirement_id=${feeA} LIMIT 1;`));
   const transactionB = Number(mysqlExec(`SELECT transaction_id FROM transactions WHERE requirement_id=${feeB} LIMIT 1;`));
-  const foreignUpdate = await call(clubA.context, 'update_transaction.php', { method: 'POST', data: { transaction_id: transactionB, amount_paid: 100, payment_status: 'paid' } });
-  check('reject cross-club transaction update', foreignUpdate.status === 404, JSON.stringify(foreignUpdate.body));
-  check('foreign transaction remains unchanged', mysqlExec(`SELECT CONCAT(amount_paid,':',payment_status) FROM transactions WHERE transaction_id=${transactionB};`) === '0.00:unpaid');
+  const voidRequest = await call(officerA.context, 'add_deletion_request.php', { method:'POST', data:{ type:'transaction', target_id:transactionA, reason:'QA request' } });
+  const repeatedVoidRequest = await call(officerA.context, 'add_deletion_request.php', { method:'POST', data:{ type:'transaction', target_id:transactionA, reason:'QA repeated' } });
+  check('duplicate transaction request reuses pending request', voidRequest.ok && repeatedVoidRequest.body.existing === true && Number(voidRequest.body.request_id) === Number(repeatedVoidRequest.body.request_id), JSON.stringify(repeatedVoidRequest.body));
+  const cancelledVoidRequest = await call(officerA.context, 'cancel_deletion_request.php', { method:'POST', data:{ request_id:Number(voidRequest.body.request_id) } });
+  check('requester can cancel pending request', cancelledVoidRequest.ok, JSON.stringify(cancelledVoidRequest.body));
+  const recreatedVoidRequest = await call(officerA.context, 'add_deletion_request.php', { method:'POST', data:{ type:'transaction', target_id:transactionA, reason:'QA recreated' } });
+  check('resolved target accepts a new pending request', recreatedVoidRequest.ok && recreatedVoidRequest.body.existing === false, JSON.stringify(recreatedVoidRequest.body));
+  const deniedVoidRequest = await call(clubA.context, 'deny_deletion_request.php', { method:'POST', data:{ request_id:Number(recreatedVoidRequest.body.request_id) } });
+  check('adviser can deny recreated request', deniedVoidRequest.ok, JSON.stringify(deniedVoidRequest.body));
+  const retiredUpdate = await call(clubA.context, 'update_transaction.php', { method: 'POST', data: { transaction_id: transactionA, amount_paid: 100, payment_status: 'paid' } });
+  check('reject retired direct payment update', retiredUpdate.status === 410, JSON.stringify(retiredUpdate.body));
+  const foreignPayment = await call(clubA.context, 'record_payment.php', { method: 'POST', data: { transaction_id: transactionB, amount: 10, payment_method: 'Cash', idempotency_key: `foreign_${stamp}` } });
+  check('reject cross-club payment', foreignPayment.status === 404, JSON.stringify(foreignPayment.body));
+  const firstPayment = await call(officerA.context, 'record_payment.php', { method: 'POST', data: { transaction_id: transactionA, amount: 40, payment_method: 'Cash', reference: 'QA-001', idempotency_key: `payment_${stamp}` } });
+  check('officer records payment', firstPayment.ok && firstPayment.body.balance === 60 && firstPayment.body.payment_status === 'partial', JSON.stringify(firstPayment.body));
+  const repeatedPayment = await call(officerA.context, 'record_payment.php', { method: 'POST', data: { transaction_id: transactionA, amount: 40, payment_method: 'Cash', reference: 'QA-001', idempotency_key: `payment_${stamp}` } });
+  check('payment retry is idempotent', repeatedPayment.ok && repeatedPayment.body.duplicate === true && repeatedPayment.body.amount_paid === 40, JSON.stringify(repeatedPayment.body));
+  const overpayment = await call(officerA.context, 'record_payment.php', { method: 'POST', data: { transaction_id: transactionA, amount: 61, payment_method: 'Cash', idempotency_key: `overpay_${stamp}` } });
+  check('reject overpayment', overpayment.status === 409, JSON.stringify(overpayment.body));
+  const ownPayments = await call(memberA.context, `get_transaction_payments.php?transaction_id=${transactionA}`);
+  check('member reads own payment history', ownPayments.ok && ownPayments.body.length === 1, JSON.stringify(ownPayments.body));
+  const foreignPayments = await call(memberB.context, `get_transaction_payments.php?transaction_id=${transactionA}`);
+  check('member cannot read foreign payment history', foreignPayments.status === 404, JSON.stringify(foreignPayments.body));
+  const paymentId = Number(firstPayment.body.payment_id);
+  const officerVoid = await call(officerA.context, 'void_payment.php', { method: 'POST', data: { payment_id: paymentId, reason: 'Not allowed' } });
+  check('officer cannot void payment', officerVoid.status === 403, JSON.stringify(officerVoid.body));
+  const adviserVoid = await call(clubA.context, 'void_payment.php', { method: 'POST', data: { payment_id: paymentId, reason: 'QA correction' } });
+  check('adviser void restores balance', adviserVoid.ok && adviserVoid.body.balance === 100 && adviserVoid.body.payment_status === 'unpaid', JSON.stringify(adviserVoid.body));
 
   const elevateInvite = await call(officerA.context, 'generate_invite.php', { method: 'POST', data: { role: 'officer', allowed: 1, expiry: 24 } });
   check('officer cannot invite privileged role', elevateInvite.status === 403, JSON.stringify(elevateInvite.body));
@@ -138,6 +167,14 @@ try {
   check('member cannot list club users', memberList.status === 403, JSON.stringify(memberList.body));
   const slotDelete = await call(officerA.context, 'delete_time_slot.php', { method: 'POST', data: { slot_id: 999999 } });
   check('officer cannot delete attendance configuration', slotDelete.status === 403, JSON.stringify(slotDelete.body));
+
+  const csv = `school_id,email,first_name,middle_name,last_name,course,year,section\r\nCSV${stamp},csv-${stamp}@example.test,CSV,,Member,BSIT,1,A\r\n,invalid,Missing,,Fields,,,\r\n`;
+  const previewImport = await call(officerA.context, 'import_members.php', { method:'POST', multipart:{ file:{ name:'members.csv', mimeType:'text/csv', buffer:Buffer.from(csv) }, mode:'preview' } });
+  check('CSV preview reports valid and invalid rows', previewImport.ok && previewImport.body.valid_rows === 1 && previewImport.body.invalid_rows === 1, JSON.stringify(previewImport.body));
+  const commitImport = await call(officerA.context, 'import_members.php', { method:'POST', multipart:{ file:{ name:'members.csv', mimeType:'text/csv', buffer:Buffer.from(csv) }, mode:'commit', content_hash:previewImport.body.content_hash } });
+  check('CSV partial commit creates only valid invitation', commitImport.ok && commitImport.body.rows.filter(row=>row.status==='pending').length === 1 && commitImport.body.rows.filter(row=>row.status==='invalid').length === 1, JSON.stringify(commitImport.body));
+  const retryImport = await call(officerA.context, 'import_members.php', { method:'POST', multipart:{ file:{ name:'members.csv', mimeType:'text/csv', buffer:Buffer.from(csv) }, mode:'commit', content_hash:previewImport.body.content_hash } });
+  check('CSV commit retry returns existing result without duplicates', retryImport.ok && retryImport.body.idempotent === true && retryImport.body.rows.length === 2, JSON.stringify(retryImport.body));
 
   const registration = await call(memberA.context, 'register_for_event.php', { method: 'POST', data: { requirement_id: eventA } });
   check('member can register self for own-club event', registration.ok, JSON.stringify(registration.body));
@@ -153,6 +190,8 @@ try {
   check('reject cross-club attendance request', foreignEditRequest.status === 404, JSON.stringify(foreignEditRequest.body));
   const editRequest = await call(officerA.context, 'add_attendance_request.php', { method: 'POST', data: { type: 'attendance', target_id: attendanceA, approval_type: 'attendance_edit', reason: 'Correction', new_data: { attendance_status: 'excused', notes: 'Approved correction' } } });
   check('officer can request own-club attendance edit', editRequest.ok, JSON.stringify(editRequest.body));
+  const repeatedEditRequest = await call(officerA.context, 'add_attendance_request.php', { method: 'POST', data: { type: 'attendance', target_id: attendanceA, approval_type: 'attendance_edit', reason: 'Repeated', new_data: { attendance_status: 'absent' } } });
+  check('repeated request reuses pending request', repeatedEditRequest.ok && repeatedEditRequest.body.existing === true && Number(repeatedEditRequest.body.request_id) === Number(editRequest.body.request_id), JSON.stringify(repeatedEditRequest.body));
   const approved = await call(clubA.context, 'approve_deletion_request.php', { method: 'POST', data: { request_id: Number(editRequest.body.request_id) } });
   check('adviser can approve attendance edit', approved.ok, JSON.stringify(approved.body));
   check('approved edit uses edit_data payload', mysqlExec(`SELECT CONCAT(attendance_status,':',notes) FROM attendance_records WHERE attendance_id=${attendanceA};`) === 'excused:Approved correction');

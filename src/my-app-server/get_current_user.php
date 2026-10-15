@@ -45,9 +45,11 @@ try {
       avatar,
       role,
       email,
-      club_id
+      users.club_id,
+      club.club_name
     FROM `users`
-    WHERE user_id = ? AND club_id = ?
+    LEFT JOIN club ON club.club_id=users.club_id
+    WHERE user_id = ? AND users.club_id = ?
     LIMIT 1
   ");
     $stmt->execute([$userId, $clubId]);

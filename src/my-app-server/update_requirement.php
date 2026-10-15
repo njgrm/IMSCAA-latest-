@@ -53,8 +53,10 @@ if (!$requirement_id || !$title || !$description || !$start_datetime || !$end_da
     exit;
 }
 
-if (strtotime($end_datetime) <= strtotime($start_datetime)) {
-    api_error(400, 'End date must be after start date.', 'INVALID_DATE_RANGE');
+// The form only offers date inputs, so a one-day requirement legitimately has
+// the same start and end date. Only a strictly earlier end is rejected.
+if (strtotime($end_datetime) < strtotime($start_datetime)) {
+    api_error(400, 'End date cannot be before start date.', 'INVALID_DATE_RANGE');
 }
 if ($requirement_type === 'fee' && $amount_due <= 0) {
     api_error(400, 'Amount due must be positive for fee requirements.', 'INVALID_AMOUNT_DUE');
@@ -103,8 +105,10 @@ try {
     ]);
 
     // Reconcile the assigned users (event/activity attendees, or a fee's payers).
-    // Only touched when the caller sends the field, so other editors stay unaffected.
-    if (array_key_exists('selected_users', $input)) {
+    // Only touched when the caller sends a non-empty list: an empty selection is
+    // how an unseeded edit form reaches this endpoint, and treating it as "remove
+    // everyone" silently wiped every attendee/payer on save.
+    if (array_key_exists('selected_users', $input) && $input['selected_users'] !== []) {
         $requested = array_values(array_unique(array_filter(
             array_map('intval', (array)$input['selected_users']),
             fn($id) => $id > 0

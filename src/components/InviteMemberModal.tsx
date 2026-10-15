@@ -21,9 +21,44 @@ export default function InviteMemberModal({ open, onClose }: { open: boolean; on
   };
   return (
     <Modal dismissible show={open} onClose={close}>
-      <Modal.Header>Invite member</Modal.Header>
-      <Modal.Body><div className="space-y-4"><p className="text-sm text-gray-600 dark:text-gray-300">The registration link is valid for this School ID and email only.</p><label className="block text-sm font-medium">School ID<input value={schoolId} onChange={event => setSchoolId(event.target.value)} className="mt-1 w-full rounded border p-2.5 dark:bg-gray-700" required /></label><label className="block text-sm font-medium">Email<input type="email" value={email} onChange={event => setEmail(event.target.value)} className="mt-1 w-full rounded border p-2.5 dark:bg-gray-700" required /></label>{link && <div className="rounded border border-primary-500 p-3"><label className="text-sm font-medium">Registration link<input readOnly value={link} className="mt-1 w-full rounded border p-2 text-gray-900" /></label><button type="button" onClick={() => void navigator.clipboard.writeText(link)} className="mt-2 rounded bg-primary-600 px-3 py-2 text-white">Copy</button></div>}</div></Modal.Body>
-      <Modal.Footer><button disabled={busy || !schoolId.trim() || !email.trim() || Boolean(link)} onClick={() => void create()} className="rounded bg-primary-600 px-4 py-2 text-white disabled:opacity-50">{busy ? 'Creating...' : 'Create invitation'}</button><button onClick={close} className="rounded border px-4 py-2">Close</button></Modal.Footer>
+      <Modal.Header className="dark:bg-gray-800">Invite member</Modal.Header>
+      <Modal.Body className="dark:bg-gray-800 dark:text-white">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-300">The registration link is valid for this School ID and email only.</p>
+          <label className="block text-sm font-medium text-gray-900 dark:text-gray-100">
+            School ID
+            <input
+              value={schoolId}
+              onChange={event => setSchoolId(event.target.value)}
+              className="mt-1 w-full rounded border border-gray-300 bg-white p-2.5 text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              required
+            />
+          </label>
+          <label className="block text-sm font-medium text-gray-900 dark:text-gray-100">
+            Email
+            <input
+              type="email"
+              value={email}
+              onChange={event => setEmail(event.target.value)}
+              className="mt-1 w-full rounded border border-gray-300 bg-white p-2.5 text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              required
+            />
+          </label>
+          {link && (
+            <div className="rounded border border-primary-500 p-3">
+              <label className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                Registration link
+                <input readOnly value={link} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <button type="button" onClick={() => void navigator.clipboard.writeText(link)} className="mt-2 rounded bg-primary-600 px-3 py-2 text-white">Copy</button>
+            </div>
+          )}
+        </div>
+      </Modal.Body>
+      <Modal.Footer className="dark:bg-gray-800">
+        <button disabled={busy || !schoolId.trim() || !email.trim() || Boolean(link)} onClick={() => void create()} className="rounded bg-primary-600 px-4 py-2 text-white disabled:opacity-50">{busy ? 'Creating...' : 'Create invitation'}</button>
+        <button onClick={close} className="rounded border border-gray-300 px-4 py-2 text-gray-900 dark:border-gray-600 dark:text-gray-100">Close</button>
+      </Modal.Footer>
     </Modal>
   );
 }
